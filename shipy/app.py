@@ -1,6 +1,6 @@
-# shipy/app.py
 import re, inspect
 from urllib.parse import parse_qs
+from http import cookies as http_cookies
 
 class App:
     def __init__(self):
@@ -56,9 +56,27 @@ class Response:
         self.body = body if isinstance(body, bytes) else body.encode()
         self.status = status
         self.headers = headers or [(b"content-type", content_type.encode())]
+        self._cookies = http_cookies.SimpleCookie()
+
+    def set_cookie(self, name, value, *, http_only=True, samesite="Lax", path="/", max_age=None, secure=False):
+        self._cookies[name] = value
+        morsel = self._cookies[name]
+        morsel["path"] = path
+        morsel["samesite"] = samesite
+        if http_only: morsel["httponly"] = True
+        if secure: morsel["secure"] = True 
+        if max_age is not None: morsel["max-age"] = str(max_age)
+
+    def delete_cookie(self, name, path="/"):
+        self.set_cookie(name, "", max_age=0, path=path)
+
     async def __call__(self, scope, receive, send):
-        await send({"type": "http.response.start", "status": self.status, "headers": self.headers})
+        headers = list(self.headers)
+        for morsel in self._cookies.values():
+            headers.append((b"set-cookie", morsel.OutputString().encode()))
+        await send({"type": "http.response.start", "status": self.status, "headers": headers})
         await send({"type": "http.response.body", "body": self.body})
+
     @classmethod
     def html(cls, text, status=200):     return cls(text, status)
     @classmethod
@@ -78,6 +96,14 @@ class Request:
         self.path_params = path_params
         self._body = None
         self.form = {}
+
+        self.cookies = {}
+        for k, v in scope.get("headers", []):
+            if k.lower() == b"cookie":
+                jar = http_cookies.SimpleCookie()
+                jar.load(v.decode())
+                self.cookies = {n: morsel.value for n, morsel in jar.items()}
+                break
 
     async def load_body(self):
         if self._body is not None:

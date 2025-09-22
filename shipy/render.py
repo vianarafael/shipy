@@ -1,78 +1,53 @@
-# from __future__ import annotations
+from __future__ import annotations
+import os
+from pathlib import Path
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-# import os
-# from typing import Any, Dict, Optional
+from .app import Response
+from .csrf import ensure_token
+from .flash import pull
 
-# _ENV = None
+_jinja_env = None
+_views_path = None
 
+def _resolve_views_path() -> Path:
+    """Prefer ./app/views, then ./views. Allow override via SHIPY_VIEWS."""
+    if os.getenv("SHIPY_VIEWS"):
+        return Path(os.getenv("SHIPY_VIEWS")).resolve()
+    base = Path(os.getenv("SHIPY_BASE", Path.cwd()))
+    for candidate in (base / "app" / "views", base / "views"):
+        if candidate.exists():
+            return candidate.resolve()
+    # default fallback even if missing (Jinja will error on missing template)
+    return (base / "app" / "views").resolve()
 
-# def _load_jinja2():
-#     try:
-#         from jinja2 import Environment, FileSystemLoader, select_autoescape
-#     except Exception as exc:  # pragma: no cover - import-time guard
-#         raise RuntimeError(
-#             "Jinja2 is required for template rendering. Install with: pip install jinja2"
-#         ) from exc
-#     return Environment, FileSystemLoader, select_autoescape
-
-
-# def get_env(views_dir: Optional[str] = None):
-#     global _ENV
-#     if _ENV is not None:
-#         return _ENV
-#     Environment, FileSystemLoader, select_autoescape = _load_jinja2()
-#     # default to app/views under current working directory
-#     base = views_dir or os.path.join(os.getcwd(), "app", "views")
-#     loader = FileSystemLoader([base])
-#     env = Environment(loader=loader, autoescape=select_autoescape(["html", "xml"]))
-
-#     # Common helpful filters/globals can be added here
-#     env.globals["shipy_version"] = lambda: __import__("shipy").__version__
-#     _ENV = env
-#     return env
-
-
-# def render(template_name: str, context: Optional[Dict[str, Any]] = None, *, request=None, views_dir: Optional[str] = None) -> str:
-#     env = get_env(views_dir)
-#     ctx: Dict[str, Any] = {}
-#     if context:
-#         ctx.update(context)
-#     if request is not None:
-#         # Surface session and flash utilities into templates if present
-#         sess = getattr(request, "session", None)
-#         if sess is not None:
-#             ctx.setdefault("session", sess)
-#             try:
-#                 ctx.setdefault("get_flashed_messages", sess.get_flashed_messages)
-#                 ctx.setdefault("csrf_token", sess.get_csrf_token())
-#             except Exception:
-#                 pass
-#     tmpl = env.get_template(template_name)
-#     return tmpl.render(**ctx)
-
-from jinja2 import Environment, FileSystemLoader, select_autoescape 
-import os 
-
-class Renderer:
-    def __init__(self, views_path="views"):
-        self.env = Environment(
-            loader=FileSystemLoader(views_path),
+def _env() -> Environment:
+    global _jinja_env, _views_path
+    if _jinja_env is None:
+        _views_path = _resolve_views_path()
+        _jinja_env = Environment(
+            loader=FileSystemLoader(str(_views_path)),
             autoescape=select_autoescape(["html", "xml"]),
+            auto_reload=True,  # fine for dev; Jinja caches in prod anyway
             enable_async=False,
         )
-    
-    def render(self, template, **ctx):
-        tpl = self.env.get_template(template)
-        return tpl.render(**ctx)
-    
-_renderer = None 
-def render(template, **ctx):
-    global _renderer
-    if _renderer is None:
-        # auto-discover views / relative to CWD
-        views = os.path.join(os.getcwd(), "app", "views")
-        _renderer = Renderer(views)
-    
-    from .app import Response
-    return Response.html(_renderer.render(template, **ctx))
+    return _jinja_env
 
+def render(template: str, **ctx) -> Response:
+    """Plain render: does NOT touch session/cookies. Good for static pages."""
+    html = _env().get_template(template).render(**ctx)
+    return Response.html(html)
+
+def render_req(req, template: str, **ctx) -> Response:
+    """
+    Render with request context:
+    - Ensures a CSRF token exists (and sets it in a cookie-backed session)
+    - Pulls flash messages (consumes them)
+    Exposes `csrf` and `flashes` to the template.
+    """
+    resp = Response.html("")                 # we need a Response to set cookies
+    csrf = ensure_token(req, resp)           # may update session cookie
+    flashes = pull(req, resp)                # consumes flash from session
+    html = _env().get_template(template).render(csrf=csrf, flashes=flashes, **ctx)
+    resp.body = html.encode()
+    return resp
