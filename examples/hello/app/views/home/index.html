@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -9,10 +9,34 @@
   <body>
     <main class="container">
       <h1>👋 Hello from Shipy</h1>
-      <p>This page is rendered with Jinja2. It also demonstrates a cookie session.</p>
+      <p>
+        This page is rendered with Jinja2. It also demonstrates a cookie
+        session.
+      </p>
       <p><strong>Visits this session:</strong> {{ visits }}</p>
-      <p>Try refreshing! Edit <code>app/views/home/index.html</code> to change this page.</p>
+      <p>
+        Try refreshing! Edit <code>app/views/home/index.html</code> to change
+        this page.
+      </p>
     </main>
+    {% if flashes %}
+    <div class="stack">
+      {% for f in flashes %}
+      <div class="flash {{ f.kind }}">{{ f.msg }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/posts" class="stack">
+      <input class="input" name="title" placeholder="Title" />
+      <textarea class="input" name="body" placeholder="Body"></textarea>
+      <input type="hidden" name="csrf" value="{{ csrf }}" />
+      <button class="btn">Create</button>
+    </form>
+
+    <form method="post" action="/logout" style="margin-top: 12px">
+      <input type="hidden" name="csrf" value="{{ csrf }}" />
+      <button class="btn">Logout</button>
+    </form>
   </body>
 </html>
-
