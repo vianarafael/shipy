@@ -1,33 +1,289 @@
+# shipy/cli.py
 from __future__ import annotations
-import argparse, os, sqlite3
+import argparse, os
 from pathlib import Path
 from typing import Optional
-from shipy.sql import connect as sql_connect
+from textwrap import dedent
+
+from shipy.sql import connect as sql_connect  # reuse PRAGMAs/row_factory
 
 def cmd_db_init(db_path: str = "db/app.sqlite", schema_path: str = "db/schema.sql") -> int:
-    con = sql_connect(db_path) # <- reuse the same PRAMAs/row_factory logic
+    db = Path(db_path)
+    con = sql_connect(str(db))
     schema = Path(schema_path)
     if schema.exists():
         con.executescript(schema.read_text(encoding="utf-8"))
-        print(f"DB initialized at {db_path} (schema: {schema_path})")
+        print(f"✅ DB initialized at {db} (schema: {schema})")
     else:
-        print(f"DB created at {db_path} (no schema.sql found)")
+        print(f"✅ DB created at {db} (no schema.sql found)")
     return 0
 
 def cmd_dev(app_ref: str, host: str, port: int, reload: bool, workers: int) -> int:
-    os.environ.setdefault("SHIPY_BASE", os.getcwd()) # helps you render() find ./app/views
-    try:
-        import uvicorn
-    except Exception as e:
-        print("Uvicorn is required. Install with: pip install 'uvicorn[standard]'", e)
-        return 2
-    # 1 worker while developing (breakpoints etc.)
-    uvicorn.run(app_ref, host=host, port=port, reload=reload, workers=workers)
+    os.environ.setdefault("SHIPY_BASE", os.getcwd())
+    # Make reloader subprocess import from the current dir
+    os.environ["PYTHONPATH"] = os.getcwd() + os.pathsep + os.environ.get("PYTHONPATH", "")
+
+    import uvicorn  # type: ignore
+    config = uvicorn.Config(
+        app_ref,
+        host=host,
+        port=port,
+        reload=reload,
+        workers=workers,
+        reload_dirs=[os.getcwd()],  # watch this dir
+    )
+    server = uvicorn.Server(config)
+    return 0 if server.run() else 1
+
+
+def _write_file(path: Path, content: str, *, force: bool):
+    if path.exists() and not force:
+        print(f"• skip {path} (exists)")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(dedent(content).lstrip(), encoding="utf-8")
+    print(f"✓ write {path}")
+
+def cmd_new(name: str, *, force: bool=False) -> int:
+    root = Path(name).resolve()
+    app = root / "app"
+    views = app / "views"
+    public = root / "public"
+    dbdir = root / "db"
+
+    # Files
+    files: dict[Path, str] = {
+        root / ".gitignore": """
+            __pycache__/
+            *.pyc
+            .env
+            db/*.sqlite*
+            .DS_Store
+        """,
+        public / "base.css": """
+            :root { --bg:#0b0b0b; --fg:#f6f6f6; --muted:#b7b7b7; --card:#151515; --acc:#60a5fa; }
+            *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+            .wrap{max-width:720px;margin:40px auto;padding:0 16px}
+            a{color:var(--acc);text-decoration:none}
+            header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+            .card{background:var(--card);padding:16px;border-radius:12px;margin:12px 0}
+            .stack>*+*{margin-top:10px}
+            .input, textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #333;background:#111;color:var(--fg)}
+            .btn{display:inline-block;border:0;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;cursor:pointer}
+            .err{color:#f87171;font-size:14px}
+            .flash{padding:8px 12px;border-radius:10px;background:#0f172a;color:#e2e8f0}
+            nav a{margin-right:10px}
+        """,
+        app / "main.py": """
+            from shipy.app import App, Response
+            from shipy.render import render_req
+            from shipy.sql import connect, query, one, exec, tx
+            from shipy.forms import Form
+            from shipy.auth import (
+                current_user, require_login,
+                hash_password, check_password,
+                login, logout,
+                too_many_login_attempts, record_login_failure, reset_login_failures
+            )
+
+            app = App()
+            connect("db/app.sqlite")
+
+            def home(req):
+                user = current_user(req)
+                posts = query("SELECT id, title FROM posts ORDER BY id DESC")
+                return render_req(req, "home/index.html", user=user, posts=posts)
+
+            def signup_form(req): return render_req(req, "users/new.html")
+
+            async def signup(req):
+                await req.load_body()
+                form = Form(req.form).require("email","password").min("password", 6).email("email")
+                if not form.ok: return render_req(req, "users/new.html", form=form)
+                if one("SELECT id FROM users WHERE email=?", form["email"]):
+                    form.errors.setdefault("email", []).append("already registered")
+                    return render_req(req, "users/new.html", form=form)
+                with tx():
+                    exec("INSERT INTO users(email,password_hash) VALUES(?,?)",
+                         form["email"], hash_password(form['password']))
+                    u = one("SELECT id,email FROM users WHERE email=?", form["email"])
+                resp = Response.redirect("/")
+                login(req, resp, u["id"])
+                return resp
+
+            def login_form(req): return render_req(req, "sessions/login.html")
+
+            async def login_post(req):
+                await req.load_body()
+                form = Form(req.form).require("email","password").email("email")
+                ip = req.scope.get("client", ("",0))[0] or "unknown"
+                if too_many_login_attempts(ip):
+                    form.errors.setdefault("email", []).append("too many attempts, try later")
+                    return render_req(req, "sessions/login.html", form=form)
+                u = one("SELECT id,email,password_hash FROM users WHERE email=?", form["email"])
+                if not u or not check_password(form["password"], u["password_hash"]):
+                    record_login_failure(ip)
+                    form.errors.setdefault("email", []).append("invalid email or password")
+                    return render_req(req, "sessions/login.html", form=form)
+                reset_login_failures(ip)
+                resp = Response.redirect("/")
+                login(req, resp, u["id"])
+                return resp
+
+            async def logout_post(req):
+                resp = Response.redirect("/")
+                logout(resp)
+                return resp
+
+            async def create_post(req):
+                await req.load_body()
+                form = Form(req.form).require("title","body").min("title", 3)
+                if not form.ok:
+                    user = current_user(req)
+                    posts = query("SELECT id,title FROM posts ORDER BY id DESC")
+                    return render_req(req, "home/index.html", form=form, posts=posts, user=user)
+                with tx():
+                    exec("INSERT INTO posts(title,body) VALUES(?,?)", form["title"], form["body"])
+                return Response.redirect("/")
+
+            def secret(req):
+                user = require_login(req)
+                if not user: return Response.redirect("/login")
+                return render_req(req, "secret.html", user=user)
+
+            app.get("/", home)
+            app.get("/signup", signup_form)
+            app.post("/signup", signup)
+            app.get("/login", login_form)
+            app.post("/login", login_post)
+            app.post("/logout", logout_post)
+            app.post("/posts", create_post)
+            app.get("/secret", secret)
+        """,
+        views / "home" / "index.html": """
+            <!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">
+            <div class="wrap">
+              <header>
+                <strong>Shipy</strong>
+                <nav>
+                  {% if user %}
+                    <span>{{ user.email }}</span>
+                    <form method="post" action="/logout" style="display:inline">
+                      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">Logout</button>
+                    </form>
+                  {% else %}
+                    <a href="/login">Login</a> <a href="/signup">Sign up</a>
+                  {% endif %}
+                </nav>
+              </header>
+
+              {% if flashes %}{% for f in flashes %}<div class="flash">{{ f.msg }}</div>{% endfor %}{% endif %}
+
+              <div class="card">
+                <h2>Posts</h2>
+                <div class="stack">
+                  {% for p in posts %}
+                    <div class="card"><strong>#{{ p.id }}</strong> — {{ p.title }}</div>
+                  {% else %}
+                    <div class="muted">No posts yet.</div>
+                  {% endfor %}
+                </div>
+              </div>
+
+              {% if user %}
+              <div class="card">
+                <h3>New post</h3>
+                <form method="post" action="/posts" class="stack">
+                  <input class="input" name="title" placeholder="Title" value="{{ form['title'] if form else '' }}">
+                  {% if form %}{% for e in form.errors_for('title') %}<div class="err">title: {{ e }}</div>{% endfor %}{% endif %}
+                  <textarea class="input" name="body" placeholder="Body">{{ form['body'] if form else '' }}</textarea>
+                  {% if form %}{% for e in form.errors_for('body') %}<div class="err">body: {{ e }}</div>{% endfor %}{% endif %}
+                  <input type="hidden" name="csrf" value="{{ csrf }}">
+                  <button class="btn">Create</button>
+                </form>
+              </div>
+              {% else %}
+                <div class="card">Log in to create posts.</div>
+              {% endif %}
+            </div>
+        """,
+        views / "sessions" / "login.html": """
+            <!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">
+            <div class="wrap">
+              <h1>Log in</h1>
+              <form method="post" action="/login" class="stack">
+                <label>Email <input class="input" name="email" value="{{ form['email'] if form else '' }}"></label>
+                {% if form %}{% for e in form.errors_for('email') %}<div class="err">email: {{ e }}</div>{% endfor %}{% endif %}
+                <label>Password <input class="input" type="password" name="password"></label>
+                {% if form %}{% for e in form.errors_for('password') %}<div class="err">password: {{ e }}</div>{% endfor %}{% endif %}
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <button class="btn">Log in</button>
+              </form>
+              <p>No account? <a href="/signup">Sign up</a></p>
+            </div>
+        """,
+        views / "users" / "new.html": """
+            <!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">
+            <div class="wrap">
+              <h1>Sign up</h1>
+              <form method="post" action="/signup" class="stack">
+                <label>Email <input class="input" name="email" value="{{ form['email'] if form else '' }}"></label>
+                {% if form %}{% for e in form.errors_for('email') %}<div class="err">email: {{ e }}</div>{% endfor %}{% endif %}
+                <label>Password (min 6) <input class="input" type="password" name="password"></label>
+                {% if form %}{% for e in form.errors_for('password') %}<div class="err">password: {{ e }}</div>{% endfor %}{% endif %}
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <button class="btn">Create account</button>
+              </form>
+              <p>Have an account? <a href="/login">Log in</a></p>
+            </div>
+        """,
+        views / "secret.html": """
+            <!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">
+            <div class="wrap"><h1>Secret</h1><p>Hello {{ user.email }}!</p></div>
+        """,
+        views / "errors" / "404.html": """
+            <!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">
+            <div class="wrap"><h1>404</h1><p>Page not found.</p></div>
+        """,
+        views / "errors" / "500.html": """
+            <!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">
+            <div class="wrap"><h1>Something went wrong</h1><p>Please try again.</p></div>
+        """,
+        dbdir / "schema.sql": """
+            CREATE TABLE IF NOT EXISTS users (
+              id INTEGER PRIMARY KEY,
+              email TEXT NOT NULL UNIQUE,
+              password_hash TEXT NOT NULL,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+            CREATE TABLE IF NOT EXISTS posts (
+              id INTEGER PRIMARY KEY,
+              title TEXT NOT NULL,
+              body TEXT NOT NULL,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """,
+    }
+
+    # Write files
+    for path, content in files.items():
+        _write_file(path, content, force=force)
+
+    print("\nNext steps:")
+    print(f"  cd {root}")
+    print("  shipy db init")
+    print("  shipy dev --app app.main:app")
     return 0
 
 def main(argv: Optional[list[str]] = None) -> int:
     p = argparse.ArgumentParser(prog="shipy", description="Shipy CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    p_new = sub.add_parser("new", help="Create a new Shipy app skeleton")
+    p_new.add_argument("name", help="Directory name (or path)")
+    p_new.add_argument("--force", action="store_true", help="Overwrite existing files")
 
     p_dev = sub.add_parser("dev", help="Run dev server")
     p_dev.add_argument("--app", default="app.main:app", help="ASGI app path, e.g. app.main:app")
@@ -45,12 +301,13 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     args = p.parse_args(argv)
 
+    if args.cmd == "new":
+        return cmd_new(args.name, force=args.force)
     if args.cmd == "dev":
         return cmd_dev(args.app, args.host, args.port, args.reload, args.workers)
-    
     if args.cmd == "db" and args.db_cmd == "init":
         return cmd_db_init(args.db, args.schema)
-    
+
     p.print_help()
     return 0
 

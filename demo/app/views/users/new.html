@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">
+<div class="wrap">
+  <h1>Sign up</h1>
+  <form method="post" action="/signup" class="stack">
+    <label>Email <input class="input" name="email" value="{{ form['email'] if form else '' }}"></label>
+    {% if form %}{% for e in form.errors_for('email') %}<div class="err">email: {{ e }}</div>{% endfor %}{% endif %}
+    <label>Password (min 6) <input class="input" type="password" name="password"></label>
+    {% if form %}{% for e in form.errors_for('password') %}<div class="err">password: {{ e }}</div>{% endfor %}{% endif %}
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn">Create account</button>
+  </form>
+  <p>Have an account? <a href="/login">Log in</a></p>
+</div>
