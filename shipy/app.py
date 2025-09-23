@@ -4,11 +4,17 @@ from urllib.parse import parse_qs
 from http import cookies as http_cookies
 from pathlib import Path
 
+# CSRF needs access to the session cookie; this import is safe
+# as long as session.py does NOT import from shipy.app.
+from .session import get_session
+
 # Base/public resolution:
 # - If SHIPY_PUBLIC is set, use it as the full path to the public directory.
 # - Else, use SHIPY_BASE/public (or CWD/public).
 _BASE = Path(os.getenv("SHIPY_BASE", Path.cwd()))
 PUBLIC_DIR = Path(os.getenv("SHIPY_PUBLIC", _BASE / "public")).resolve()
+
+UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
 async def _serve_static(scope, receive, send):
@@ -53,12 +59,12 @@ class App:
 
     def get(self, path, handler):   self.add("GET",  path, handler)
     def post(self, path, handler):  self.add("POST", path, handler)
+    # (add put/patch/delete if you want explicit helpers later)
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return
 
-        # define BEFORE using
         method = scope["method"].upper()
         path   = scope["path"]
 
@@ -74,7 +80,20 @@ class App:
             if not mobj:
                 continue
 
+            # Build a single Request object for this lifecycle
             req = Request(scope, receive, mobj.groupdict())
+
+            # === Global CSRF guard ===
+            if method in UNSAFE_METHODS:
+                # For v0.1 we protect form POSTs (urlencoded); JSON can be added later.
+                await req.load_body()
+                s = get_session(req) or {}
+                sent = req.form.get("csrf")
+                if not sent or sent != s.get("csrf"):
+                    return await Response.text("Forbidden (CSRF)", 403)(scope, receive, send)
+            # =========================
+
+            # Call handler (sync or async)
             result = handler(req)
             if inspect.isawaitable(result):
                 result = await result
