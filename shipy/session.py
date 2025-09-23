@@ -6,7 +6,7 @@ SECRET = os.getenv("SHIPY_SECRET", "dev-secret-change-me").encode()
 def _sign(b): return hmac.new(SECRET, b, hashlib.sha256).digest()
 
 def _pack(data: dict) -> str:
-    raw = json.dump(data, separators=(",", ":")).encode()
+    raw = json.dumps(data, separators=(",", ":")).encode()
     sig = _sign(raw)
     return base64.urlsafe_b64encode(raw + sig).decode()
 

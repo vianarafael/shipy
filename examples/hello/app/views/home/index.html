@@ -19,6 +19,15 @@
         this page.
       </p>
     </main>
+
+    <div>
+      <p>sup? {{posts}}</p>
+      <ul>
+        {% for post in posts %}
+        <li>{{ post.title }}</li>
+        {% endfor %}
+      </ul>
+    </div>
     {% if flashes %}
     <div class="stack">
       {% for f in flashes %}

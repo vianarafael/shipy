@@ -1,16 +1,49 @@
-import re, inspect
+# shipy/app.py
+import re, inspect, os, mimetypes
 from urllib.parse import parse_qs
 from http import cookies as http_cookies
+from pathlib import Path
+
+# Base/public resolution:
+# - If SHIPY_PUBLIC is set, use it as the full path to the public directory.
+# - Else, use SHIPY_BASE/public (or CWD/public).
+_BASE = Path(os.getenv("SHIPY_BASE", Path.cwd()))
+PUBLIC_DIR = Path(os.getenv("SHIPY_PUBLIC", _BASE / "public")).resolve()
+
+
+async def _serve_static(scope, receive, send):
+    """Very small dev-time static file server for /public/*."""
+    path = scope["path"]
+    method = scope["method"].upper()
+
+    if not path.startswith("/public/"):
+        return await Response.text("Not Found", 404)(scope, receive, send)
+
+    rel = path[len("/public/"):]
+    root = PUBLIC_DIR
+    file = (root / rel).resolve()
+
+    # prevent traversal and 404 if missing
+    if not str(file).startswith(str(root)) or not file.is_file():
+        return await Response.text("Not Found", 404)(scope, receive, send)
+
+    data = file.read_bytes()
+    ctype = mimetypes.guess_type(str(file))[0] or "application/octet-stream"
+    resp = Response(data, 200, headers=[(b"content-type", ctype.encode())])
+    if method == "HEAD":
+        resp.body = b""
+    return await resp(scope, receive, send)
+
 
 class App:
     def __init__(self):
-        self.routes = []
+        self.routes = []  # list of (method, compiled_regex, handler)
 
     def _compile_path(self, path: str) -> re.Pattern:
         # {id:int}  -> (?P<id>\d+)
-        def repl_int(m):   return f"(?P<{m.group(1)}>\\d+)"
+        def repl_int(m): return f"(?P<{m.group(1)}>\\d+)"
         # {slug}    -> (?P<slug>[^/]+)
-        def repl_str(m):   return f"(?P<{m.group(1)}>[^/]+)"
+        def repl_str(m): return f"(?P<{m.group(1)}>[^/]+)"
         path = re.sub(r"{(\w+):int}", repl_int, path)
         path = re.sub(r"{(\w+)}", repl_str, path)
         return re.compile("^" + path + "$")
@@ -24,9 +57,16 @@ class App:
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return
+
+        # define BEFORE using
         method = scope["method"].upper()
         path   = scope["path"]
 
+        # Dev static files under /public/
+        if path.startswith("/public/") and method in ("GET", "HEAD"):
+            return await _serve_static(scope, receive, send)
+
+        # Route matching (imperative registration)
         for m, rx, handler in self.routes:
             if m != method:
                 continue
@@ -34,18 +74,12 @@ class App:
             if not mobj:
                 continue
 
-            # Build Request
             req = Request(scope, receive, mobj.groupdict())
-
-            # Call handler (sync or async)
             result = handler(req)
             if inspect.isawaitable(result):
                 result = await result
-
-            # Ensure it's a Response
             if not isinstance(result, Response):
                 result = Response.html(str(result))
-
             return await result(scope, receive, send)
 
         return await Response.text("Not Found", 404)(scope, receive, send)
@@ -64,7 +98,7 @@ class Response:
         morsel["path"] = path
         morsel["samesite"] = samesite
         if http_only: morsel["httponly"] = True
-        if secure: morsel["secure"] = True 
+        if secure: morsel["secure"] = True
         if max_age is not None: morsel["max-age"] = str(max_age)
 
     def delete_cookie(self, name, path="/"):
@@ -78,11 +112,12 @@ class Response:
         await send({"type": "http.response.body", "body": self.body})
 
     @classmethod
-    def html(cls, text, status=200):     return cls(text, status)
+    def html(cls, text, status=200):       return cls(text, status)
     @classmethod
-    def text(cls, text, status=200):     return cls(text, status, content_type="text/plain; charset=utf-8")
+    def text(cls, text, status=200):       return cls(text, status, content_type="text/plain; charset=utf-8")
     @classmethod
-    def redirect(cls, location, status=303): return cls(b"", status, headers=[(b"location", location.encode())])
+    def redirect(cls, location, status=303):
+        return cls(b"", status, headers=[(b"location", location.encode())])
 
 
 class Request:
@@ -91,12 +126,13 @@ class Request:
         self._receive = receive
         self.method = scope["method"]
         self.path = scope["path"]
-        self.query = {k: (v[0] if len(v) == 1 else v)
-                      for k, v in parse_qs(scope.get("query_string", b"").decode()).items()}
+        self.query = {
+            k: (v[0] if len(v) == 1 else v)
+            for k, v in parse_qs(scope.get("query_string", b"").decode()).items()
+        }
         self.path_params = path_params
         self._body = None
         self.form = {}
-
         self.cookies = {}
         for k, v in scope.get("headers", []):
             if k.lower() == b"cookie":
@@ -120,5 +156,7 @@ class Request:
         headers = {k.decode(): v.decode() for k, v in self.scope.get("headers", [])}
         ctype = headers.get("content-type", "")
         if "application/x-www-form-urlencoded" in ctype:
-            self.form = {k: (v[0] if len(v) == 1 else v)
-                         for k, v in parse_qs(self._body.decode()).items()}
+            self.form = {
+                k: (v[0] if len(v) == 1 else v)
+                for k, v in parse_qs(self._body.decode()).items()
+            }

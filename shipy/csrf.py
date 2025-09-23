@@ -21,6 +21,7 @@ def verify(req):
     # ensure request.form is loaded before calling verify
     s = get_session(req)
     sent = req.form.get("csrf")
+    print("req", req)
     good = bool(sent) and sent == s.get("csrf")
     if not good:
         from .app import Response
