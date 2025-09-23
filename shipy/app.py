@@ -1,24 +1,48 @@
 # shipy/app.py
-import re, inspect, os, mimetypes
+import re, inspect, os, mimetypes, traceback, html
 from urllib.parse import parse_qs
 from http import cookies as http_cookies
 from pathlib import Path
 
-# CSRF needs access to the session cookie; this import is safe
-# as long as session.py does NOT import from shipy.app.
+# CSRF needs the session cookie; session.py must NOT import from app.py (no cycles).
 from .session import get_session
 
-# Base/public resolution:
-# - If SHIPY_PUBLIC is set, use it as the full path to the public directory.
-# - Else, use SHIPY_BASE/public (or CWD/public).
+# ---- Config & paths ---------------------------------------------------------
+def _env_bool(name: str, default: bool = False) -> bool:
+    v = os.getenv(name)
+    if v is None:
+        return default
+    return v.strip().lower() in ("1", "true", "yes", "on")
+
+DEBUG = _env_bool("SHIPY_DEBUG", True)  # dev default True; set SHIPY_DEBUG=0 in prod
+
 _BASE = Path(os.getenv("SHIPY_BASE", Path.cwd()))
 PUBLIC_DIR = Path(os.getenv("SHIPY_PUBLIC", _BASE / "public")).resolve()
+
+# Where to look for error templates
+_ERROR_DIRS = [
+    (_BASE / "app" / "views" / "errors").resolve(),
+    (_BASE / "views" / "errors").resolve(),
+]
 
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
+# ---- Helpers ----------------------------------------------------------------
+def _read_error_template(name: str) -> str | None:
+    """Return the error HTML if found (e.g., '404.html' in views/errors/)."""
+    for d in _ERROR_DIRS:
+        f = d / f"{name}.html"
+        if f.is_file():
+            try:
+                return f.read_text(encoding="utf-8")
+            except Exception:
+                pass
+    return None
+
+
 async def _serve_static(scope, receive, send):
-    """Very small dev-time static file server for /public/*."""
+    """Tiny dev-time static server for /public/*."""
     path = scope["path"]
     method = scope["method"].upper()
 
@@ -41,6 +65,24 @@ async def _serve_static(scope, receive, send):
     return await resp(scope, receive, send)
 
 
+def _pretty_tb_html(exc: BaseException) -> str:
+    tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    esc = html.escape(tb)
+    return f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>500 Internal Server Error</title>
+<style>
+body{{font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding:24px;}}
+pre{{background:#111;color:#f6f6f6;padding:16px;border-radius:12px;overflow:auto}}
+h1{{margin-top:0}}
+</style>
+</head><body>
+<h1>500 Internal Server Error</h1>
+<p>DEBUG is on (SHIPY_DEBUG=1). Here’s the traceback:</p>
+<pre>{esc}</pre>
+</body></html>"""
+
+
+# ---- Core -------------------------------------------------------------------
 class App:
     def __init__(self):
         self.routes = []  # list of (method, compiled_regex, handler)
@@ -59,7 +101,7 @@ class App:
 
     def get(self, path, handler):   self.add("GET",  path, handler)
     def post(self, path, handler):  self.add("POST", path, handler)
-    # (add put/patch/delete if you want explicit helpers later)
+    # (add put/patch/delete helpers later if needed)
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -68,11 +110,18 @@ class App:
         method = scope["method"].upper()
         path   = scope["path"]
 
-        # Dev static files under /public/
+        # Health check (always 200 ok)
+        if path == "/health":
+            body = b"ok"
+            if method == "HEAD":
+                body = b""
+            return await Response(body, 200, headers=[(b"content-type", b"text/plain; charset=utf-8")])(scope, receive, send)
+
+        # Dev static under /public/
         if path.startswith("/public/") and method in ("GET", "HEAD"):
             return await _serve_static(scope, receive, send)
 
-        # Route matching (imperative registration)
+        # Route matching
         for m, rx, handler in self.routes:
             if m != method:
                 continue
@@ -80,28 +129,36 @@ class App:
             if not mobj:
                 continue
 
-            # Build a single Request object for this lifecycle
             req = Request(scope, receive, mobj.groupdict())
 
-            # === Global CSRF guard ===
+            # Global CSRF guard for unsafe methods (form posts)
             if method in UNSAFE_METHODS:
-                # For v0.1 we protect form POSTs (urlencoded); JSON can be added later.
                 await req.load_body()
                 s = get_session(req) or {}
                 sent = req.form.get("csrf")
                 if not sent or sent != s.get("csrf"):
                     return await Response.text("Forbidden (CSRF)", 403)(scope, receive, send)
-            # =========================
 
-            # Call handler (sync or async)
-            result = handler(req)
-            if inspect.isawaitable(result):
-                result = await result
+            # Call handler with error handling
+            try:
+                result = handler(req)
+                if inspect.isawaitable(result):
+                    result = await result
+            except Exception as exc:
+                if DEBUG:
+                    html_page = _pretty_tb_html(exc)
+                    return await Response.html(html_page, 500)(scope, receive, send)
+                # Try to render 500.html; fallback to plain text
+                tpl = _read_error_template("500")
+                return await (Response.html(tpl, 500) if tpl else Response.text("Internal Server Error", 500))(scope, receive, send)
+
             if not isinstance(result, Response):
                 result = Response.html(str(result))
             return await result(scope, receive, send)
 
-        return await Response.text("Not Found", 404)(scope, receive, send)
+        # No route matched → 404 page
+        tpl = _read_error_template("404")
+        return await (Response.html(tpl, 404) if tpl else Response.text("Not Found", 404))(scope, receive, send)
 
 
 class Response:
