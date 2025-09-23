@@ -1,0 +1,18 @@
+[Unit]
+Description=Shipy app demo-app
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/Users/rafael/projects/shipy/demo
+Environment=SHIPY_BASE=/Users/rafael/projects/shipy/demo
+Environment=SHIPY_DEBUG=0
+# Replace this with: shipy gensecret
+Environment=SHIPY_SECRET=CHANGE_ME
+ExecStart=/usr/bin/env uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=always
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target

@@ -1,11 +1,13 @@
 # shipy/cli.py
 from __future__ import annotations
-import argparse, os
+import argparse, os, sqlite3, secrets, datetime
 from pathlib import Path
 from typing import Optional
 from textwrap import dedent
 
 from shipy.sql import connect as sql_connect  # reuse PRAGMAs/row_factory
+
+# ---------- DB ----------------------------------------------------------------
 
 def cmd_db_init(db_path: str = "db/app.sqlite", schema_path: str = "db/schema.sql") -> int:
     db = Path(db_path)
@@ -18,11 +20,28 @@ def cmd_db_init(db_path: str = "db/app.sqlite", schema_path: str = "db/schema.sq
         print(f"✅ DB created at {db} (no schema.sql found)")
     return 0
 
+def cmd_db_backup(db_path: str = "db/app.sqlite", out_dir: str = "db/backups") -> int:
+    srcp = Path(db_path)
+    if not srcp.exists():
+        print(f"DB not found: {srcp}")
+        return 2
+    out = Path(out_dir); out.mkdir(parents=True, exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    dest = out / f"{srcp.stem}-{ts}.sqlite"
+    src = sqlite3.connect(str(srcp))
+    dst = sqlite3.connect(str(dest))
+    with dst:
+        src.backup(dst)
+    dst.close(); src.close()
+    print(f"📦 Backup written: {dest}")
+    return 0
+
+# ---------- DEV ----------------------------------------------------------------
+
 def cmd_dev(app_ref: str, host: str, port: int, reload: bool, workers: int) -> int:
     os.environ.setdefault("SHIPY_BASE", os.getcwd())
     # Make reloader subprocess import from the current dir
     os.environ["PYTHONPATH"] = os.getcwd() + os.pathsep + os.environ.get("PYTHONPATH", "")
-
     import uvicorn  # type: ignore
     config = uvicorn.Config(
         app_ref,
@@ -30,11 +49,12 @@ def cmd_dev(app_ref: str, host: str, port: int, reload: bool, workers: int) -> i
         port=port,
         reload=reload,
         workers=workers,
-        reload_dirs=[os.getcwd()],  # watch this dir
+        reload_dirs=[os.getcwd()],
     )
     server = uvicorn.Server(config)
     return 0 if server.run() else 1
 
+# ---------- NEW ----------------------------------------------------------------
 
 def _write_file(path: Path, content: str, *, force: bool):
     if path.exists() and not force:
@@ -51,7 +71,6 @@ def cmd_new(name: str, *, force: bool=False) -> int:
     public = root / "public"
     dbdir = root / "db"
 
-    # Files
     files: dict[Path, str] = {
         root / ".gitignore": """
             __pycache__/
@@ -266,8 +285,6 @@ def cmd_new(name: str, *, force: bool=False) -> int:
             );
         """,
     }
-
-    # Write files
     for path, content in files.items():
         _write_file(path, content, force=force)
 
@@ -276,6 +293,78 @@ def cmd_new(name: str, *, force: bool=False) -> int:
     print("  shipy db init")
     print("  shipy dev --app app.main:app")
     return 0
+
+# ---------- DEPLOY ------------------------------------------------------------
+
+def cmd_deploy_emit(path: str, service: str, domain: str, port: int, user: str, workdir: str) -> int:
+    out = Path(path); out.mkdir(parents=True, exist_ok=True)
+    workdir = str(Path(workdir).resolve())
+    public = str((Path(workdir) / "public").resolve())
+
+    service_file = out / f"{service}.service"
+    nginx_file = out / f"{domain}.conf"
+
+    _write_file(service_file, f"""
+        [Unit]
+        Description=Shipy app {service}
+        After=network.target
+
+        [Service]
+        Type=simple
+        WorkingDirectory={workdir}
+        Environment=SHIPY_BASE={workdir}
+        Environment=SHIPY_DEBUG=0
+        # Replace this with: shipy gensecret
+        Environment=SHIPY_SECRET=CHANGE_ME
+        ExecStart=/usr/bin/env uvicorn app.main:app --host 127.0.0.1 --port {port} --workers 2
+        Restart=always
+        User={user}
+        Group={user}
+
+        [Install]
+        WantedBy=multi-user.target
+    """, force=True)
+
+    _write_file(nginx_file, f"""
+        server {{
+          listen 80;
+          server_name {domain};
+
+          root {public};
+
+          location /public/ {{
+            try_files $uri =404;
+            add_header Cache-Control "public, max-age=31536000, immutable";
+          }}
+
+          location / {{
+            proxy_pass http://127.0.0.1:{port};
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_redirect off;
+          }}
+        }}
+    """, force=True)
+
+    print(f"\nDeploy files written to: {out}")
+    print(f"  • systemd: {service_file.name}")
+    print(f"  • nginx  : {nginx_file.name}")
+    print("\nServer steps (Ubuntu):")
+    print("  sudo cp deploy/*.service /etc/systemd/system/")
+    print(f"  sudo systemctl enable --now {service}.service")
+    print(f"  sudo cp deploy/{domain}.conf /etc/nginx/sites-available/")
+    print(f"  sudo ln -sf /etc/nginx/sites-available/{domain}.conf /etc/nginx/sites-enabled/{domain}.conf")
+    print("  sudo nginx -t && sudo systemctl reload nginx")
+    print("  curl -s http://YOUR_DOMAIN/health")
+    return 0
+
+def cmd_gensecret() -> int:
+    print(secrets.token_urlsafe(32))
+    return 0
+
+# ---------- MAIN --------------------------------------------------------------
 
 def main(argv: Optional[list[str]] = None) -> int:
     p = argparse.ArgumentParser(prog="shipy", description="Shipy CLI")
@@ -298,6 +387,21 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_db_init = p_db_sub.add_parser("init", help="Create SQLite and run schema.sql (if present)")
     p_db_init.add_argument("--db", default="db/app.sqlite")
     p_db_init.add_argument("--schema", default="db/schema.sql")
+    p_db_backup = p_db_sub.add_parser("backup", help="Online backup to db/backups/")
+    p_db_backup.add_argument("--db", default="db/app.sqlite")
+    p_db_backup.add_argument("--out", default="db/backups")
+
+    p_dep = sub.add_parser("deploy", help="Deployment helpers")
+    p_dep_sub = p_dep.add_subparsers(dest="dep_cmd", required=True)
+    p_emit = p_dep_sub.add_parser("emit", help="Write systemd + nginx files to ./deploy")
+    p_emit.add_argument("--path", default="deploy")
+    p_emit.add_argument("--service", default=Path(os.getcwd()).name + "-app")
+    p_emit.add_argument("--domain", required=True, help="your-domain.com")
+    p_emit.add_argument("--port", type=int, default=8000)
+    p_emit.add_argument("--user", default="www-data")
+    p_emit.add_argument("--workdir", default=os.getcwd())
+
+    p_secret = sub.add_parser("gensecret", help="Generate a random SHIPY_SECRET")
 
     args = p.parse_args(argv)
 
@@ -307,6 +411,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         return cmd_dev(args.app, args.host, args.port, args.reload, args.workers)
     if args.cmd == "db" and args.db_cmd == "init":
         return cmd_db_init(args.db, args.schema)
+    if args.cmd == "db" and args.db_cmd == "backup":
+        return cmd_db_backup(args.db, args.out)
+    if args.cmd == "deploy" and args.dep_cmd == "emit":
+        return cmd_deploy_emit(args.path, args.service, args.domain, args.port, args.user, args.workdir)
+    if args.cmd == "gensecret":
+        return cmd_gensecret()
 
     p.print_help()
     return 0

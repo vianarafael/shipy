@@ -1,3 +1,4 @@
+# shipy/app.py
 import re, inspect, os, mimetypes, traceback, html
 from urllib.parse import parse_qs
 from http import cookies as http_cookies
@@ -70,9 +71,10 @@ def _pretty_tb_html(exc: BaseException) -> str:
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>500 Internal Server Error</title>
 <style>
-body{{font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding:24px;}}
+body{{font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:24px;background:#0b0b0b;color:#f6f6f6}}
 pre{{background:#111;color:#f6f6f6;padding:16px;border-radius:12px;overflow:auto}}
 h1{{margin-top:0}}
+a{{color:#60a5fa}}
 </style>
 </head><body>
 <h1>500 Internal Server Error</h1>
@@ -111,24 +113,31 @@ class App:
 
         # Health check (always 200 ok)
         if path == "/health":
-            body = b"ok"
-            if method == "HEAD":
-                body = b""
+            body = b"ok" if method != "HEAD" else b""
             return await Response(body, 200, headers=[(b"content-type", b"text/plain; charset=utf-8")])(scope, receive, send)
 
         # Dev static under /public/
         if path.startswith("/public/") and method in ("GET", "HEAD"):
             return await _serve_static(scope, receive, send)
 
-        # Route matching
+        # Route matching + method handling (405 + HEAD shim)
+        allowed: set[str] = set()
+        chosen = None          # (handler, params, head_shim: bool)
         for m, rx, handler in self.routes:
-            if m != method:
-                continue
             mobj = rx.match(path)
             if not mobj:
                 continue
+            allowed.add(m)
+            if m == method:
+                chosen = (handler, mobj.groupdict(), False)
+                break
+            # HEAD shim: if method is HEAD and route defines GET
+            if method == "HEAD" and m == "GET" and chosen is None:
+                chosen = (handler, mobj.groupdict(), True)
 
-            req = Request(scope, receive, mobj.groupdict())
+        if chosen:
+            handler, params, head_shim = chosen
+            req = Request(scope, receive, params)
 
             # Global CSRF guard for unsafe methods (form posts)
             if method in UNSAFE_METHODS:
@@ -147,13 +156,26 @@ class App:
                 if DEBUG:
                     html_page = _pretty_tb_html(exc)
                     return await Response.html(html_page, 500)(scope, receive, send)
-                # Try to render 500.html; fallback to plain text
                 tpl = _read_error_template("500")
                 return await (Response.html(tpl, 500) if tpl else Response.text("Internal Server Error", 500))(scope, receive, send)
 
             if not isinstance(result, Response):
                 result = Response.html(str(result))
+            if head_shim:
+                result.body = b""
             return await result(scope, receive, send)
+
+        # If we matched the path but not the method → 405 with Allow
+        if allowed:
+            allow = set(allowed)
+            if "GET" in allow:
+                allow.add("HEAD")  # advertise HEAD when GET exists
+            allow_hdr = ", ".join(sorted(allow))
+            return await Response.text("Method Not Allowed", 405)(
+                {**scope, "headers": scope.get("headers", [])},  # pass-through
+                receive,
+                lambda msg: send({**msg, "headers": (msg.get("headers") or []) + [(b"allow", allow_hdr.encode())]})
+            )
 
         # No route matched → 404 page
         tpl = _read_error_template("404")
@@ -168,6 +190,9 @@ class Response:
         self._cookies = http_cookies.SimpleCookie()
 
     def set_cookie(self, name, value, *, http_only=True, samesite="Lax", path="/", max_age=None, secure=False):
+        # In prod, default to Secure cookies unless caller explicitly wants otherwise
+        if not DEBUG:
+            secure = True
         self._cookies[name] = value
         morsel = self._cookies[name]
         morsel["path"] = path
@@ -180,6 +205,18 @@ class Response:
         self.set_cookie(name, "", max_age=0, path=path)
 
     async def __call__(self, scope, receive, send):
+        # Default security headers in prod (add if missing)
+        if not DEBUG:
+            have = {k.lower(): True for (k, _) in ((h[0].decode(), h[1]) for h in self.headers)}
+            sec = []
+            if "x-content-type-options" not in have:
+                sec.append((b"x-content-type-options", b"nosniff"))
+            if "referrer-policy" not in have:
+                sec.append((b"referrer-policy", b"no-referrer"))
+            if "x-frame-options" not in have:
+                sec.append((b"x-frame-options", b"DENY"))
+            self.headers = list(self.headers) + sec
+
         headers = list(self.headers)
         for morsel in self._cookies.values():
             headers.append((b"set-cookie", morsel.OutputString().encode()))
