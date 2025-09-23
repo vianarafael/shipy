@@ -1,18 +1,36 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.18"]
 build-backend = "hatchling.build"
 
 [project]
-name = "shipy"
+name = "shipy"                # <- change if taken
 version = "0.1.0"
-description = "Opinionated indie-maker Python web framework for shipping MVPs stupid-fast."
+description = "The opinionated Indie Maker Python web framework for shipping MVPs stupid-fast."
 readme = "README.md"
-license = { text = "MIT" }
 requires-python = ">=3.11"
-dependencies = ["Jinja2>=3.1", "uvicorn>=0.30"]
+license = { text = "MIT" }
+authors = [{ name = "You", email = "you@example.com" }]
+keywords = ["web", "framework", "mvp", "sqlite", "jinja2"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Framework :: AsyncIO",
+  "Intended Audience :: Developers",
+  "Topic :: Internet :: WWW/HTTP",
+]
+
+dependencies = [
+  "jinja2>=3.1",
+  "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+bcrypt = ["bcrypt>=4.0"]
+test = ["pytest>=8.0", "anyio>=4.0", "httpx>=0.27"]
 
 [project.scripts]
 shipy = "shipy.cli:main"
 
-[tool.hatch.build.targets.wheel]
-packages = ["shipy"]
+[project.urls]
+Homepage = "https://github.com/vianarafael/shipy"
+Issues = "https://github.com/vianarafael/shipy/issues"
