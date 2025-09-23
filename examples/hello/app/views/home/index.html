@@ -47,5 +47,14 @@
       <input type="hidden" name="csrf" value="{{ csrf }}" />
       <button class="btn">Logout</button>
     </form>
+
+    {% if user %}
+    <form method="post" action="/logout" style="display: inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}" />
+      <button class="btn" title="{{ user.email }}">Logout</button>
+    </form>
+    {% else %}
+    <a href="/login">Login</a> • <a href="/signup">Sign up</a>
+    {% endif %}
   </body>
 </html>

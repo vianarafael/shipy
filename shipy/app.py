@@ -1,4 +1,3 @@
-# shipy/app.py
 import re, inspect, os, mimetypes, traceback, html
 from urllib.parse import parse_qs
 from http import cookies as http_cookies
