@@ -1,0 +1,45 @@
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">
+<div class="wrap">
+  <header>
+    <strong>Shipy</strong>
+    <nav>
+      {% if user %}
+        <span>{{ user.email }}</span>
+        <form method="post" action="/logout" style="display:inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">Logout</button>
+        </form>
+      {% else %}
+        <a href="/login">Login</a> <a href="/signup">Sign up</a>
+      {% endif %}
+    </nav>
+  </header>
+
+  {% if flashes %}{% for f in flashes %}<div class="flash">{{ f.msg }}</div>{% endfor %}{% endif %}
+
+  <div class="card">
+    <h2>Posts</h2>
+    <div class="stack">
+      {% for p in posts %}
+        <div class="card"><strong>#{{ p.id }}</strong> — {{ p.title }}</div>
+      {% else %}
+        <div class="muted">No posts yet.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if user %}
+  <div class="card">
+    <h3>New post</h3>
+    <form method="post" action="/posts" class="stack">
+      <input class="input" name="title" placeholder="Title" value="{{ form['title'] if form else '' }}">
+      {% if form %}{% for e in form.errors_for('title') %}<div class="err">title: {{ e }}</div>{% endfor %}{% endif %}
+      <textarea class="input" name="body" placeholder="Body">{{ form['body'] if form else '' }}</textarea>
+      {% if form %}{% for e in form.errors_for('body') %}<div class="err">body: {{ e }}</div>{% endfor %}{% endif %}
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn">Create</button>
+    </form>
+  </div>
+  {% else %}
+    <div class="card">Log in to create posts.</div>
+  {% endif %}
+</div>

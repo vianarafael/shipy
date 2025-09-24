@@ -1,16 +1,23 @@
 # shipy/cli.py
 from __future__ import annotations
-import argparse, os, sqlite3, secrets, datetime
+
+import argparse
+import datetime
+import os
+import secrets
+import sqlite3
 from pathlib import Path
-from typing import Optional
 from textwrap import dedent
+from typing import Optional
 
 from shipy.sql import connect as sql_connect  # reuse PRAGMAs/row_factory
+
 
 # ---------- DB ----------------------------------------------------------------
 
 def cmd_db_init(db_path: str = "db/app.sqlite", schema_path: str = "db/schema.sql") -> int:
     db = Path(db_path)
+    db.parent.mkdir(parents=True, exist_ok=True)
     con = sql_connect(str(db))
     schema = Path(schema_path)
     if schema.exists():
@@ -20,39 +27,53 @@ def cmd_db_init(db_path: str = "db/app.sqlite", schema_path: str = "db/schema.sq
         print(f"✅ DB created at {db} (no schema.sql found)")
     return 0
 
+
 def cmd_db_backup(db_path: str = "db/app.sqlite", out_dir: str = "db/backups") -> int:
     srcp = Path(db_path)
     if not srcp.exists():
         print(f"DB not found: {srcp}")
         return 2
-    out = Path(out_dir); out.mkdir(parents=True, exist_ok=True)
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     dest = out / f"{srcp.stem}-{ts}.sqlite"
     src = sqlite3.connect(str(srcp))
     dst = sqlite3.connect(str(dest))
     with dst:
         src.backup(dst)
-    dst.close(); src.close()
+    dst.close()
+    src.close()
     print(f"📦 Backup written: {dest}")
     return 0
+
 
 # ---------- DEV ----------------------------------------------------------------
 
 def cmd_dev(app_ref: str, host: str, port: int, reload: bool, workers: int) -> int:
-    os.environ.setdefault("SHIPY_BASE", os.getcwd())
-    # Make reloader subprocess import from the current dir
-    os.environ["PYTHONPATH"] = os.getcwd() + os.pathsep + os.environ.get("PYTHONPATH", "")
+    # Ensure the current working directory is importable as top-level (so 'app.*' resolves)
+    import sys
     import uvicorn  # type: ignore
+
+    cwd = os.getcwd()
+    os.environ.setdefault("SHIPY_BASE", cwd)
+
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+
+    # Ensure the reload subprocess inherits the path too
+    os.environ["PYTHONPATH"] = cwd + os.pathsep + os.environ.get("PYTHONPATH", "")
+
     config = uvicorn.Config(
         app_ref,
         host=host,
         port=port,
         reload=reload,
         workers=workers,
-        reload_dirs=[os.getcwd()],
+        reload_dirs=[cwd],
     )
     server = uvicorn.Server(config)
     return 0 if server.run() else 1
+
 
 # ---------- NEW ----------------------------------------------------------------
 
@@ -64,7 +85,8 @@ def _write_file(path: Path, content: str, *, force: bool):
     path.write_text(dedent(content).lstrip(), encoding="utf-8")
     print(f"✓ write {path}")
 
-def cmd_new(name: str, *, force: bool=False) -> int:
+
+def cmd_new(name: str, *, force: bool = False) -> int:
     root = Path(name).resolve()
     app = root / "app"
     views = app / "views"
@@ -79,6 +101,8 @@ def cmd_new(name: str, *, force: bool=False) -> int:
             db/*.sqlite*
             .DS_Store
         """,
+        # Make 'app' a real package so 'app.main:app' imports everywhere
+        app / "__init__.py": "",
         public / "base.css": """
             :root { --bg:#0b0b0b; --fg:#f6f6f6; --muted:#b7b7b7; --card:#151515; --acc:#60a5fa; }
             *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -294,10 +318,12 @@ def cmd_new(name: str, *, force: bool=False) -> int:
     print("  shipy dev --app app.main:app")
     return 0
 
+
 # ---------- DEPLOY ------------------------------------------------------------
 
 def cmd_deploy_emit(path: str, service: str, domain: str, port: int, user: str, workdir: str) -> int:
-    out = Path(path); out.mkdir(parents=True, exist_ok=True)
+    out = Path(path)
+    out.mkdir(parents=True, exist_ok=True)
     workdir = str(Path(workdir).resolve())
     public = str((Path(workdir) / "public").resolve())
 
@@ -360,9 +386,11 @@ def cmd_deploy_emit(path: str, service: str, domain: str, port: int, user: str, 
     print("  curl -s http://YOUR_DOMAIN/health")
     return 0
 
+
 def cmd_gensecret() -> int:
     print(secrets.token_urlsafe(32))
     return 0
+
 
 # ---------- MAIN --------------------------------------------------------------
 
@@ -420,6 +448,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     p.print_help()
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
