@@ -63,4 +63,4 @@ Apply schema with `shipy db init --schema data/schema.sql`.
 
 ## License
 
-MIT — see `LICENSE:1`.
+MIT.
