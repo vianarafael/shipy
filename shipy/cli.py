@@ -218,31 +218,42 @@ def cmd_new(name: str, *, force: bool = False) -> int:
 
               {% if flashes %}{% for f in flashes %}<div class="flash">{{ f.msg }}</div>{% endfor %}{% endif %}
 
-              <div class="card">
-                <h2>Posts</h2>
-                <div class="stack">
-                  {% for p in posts %}
-                    <div class="card"><strong>#{{ p.id }}</strong> — {{ p.title }}</div>
-                  {% else %}
-                    <div class="muted">No posts yet.</div>
-                  {% endfor %}
-                </div>
-              </div>
-
               {% if user %}
               <div class="card">
-                <h3>New post</h3>
-                <form method="post" action="/posts" class="stack">
-                  <input class="input" name="title" placeholder="Title" value="{{ form['title'] if form else '' }}">
-                  {% if form %}{% for e in form.errors_for('title') %}<div class="err">title: {{ e }}</div>{% endfor %}{% endif %}
-                  <textarea class="input" name="body" placeholder="Body">{{ form['body'] if form else '' }}</textarea>
-                  {% if form %}{% for e in form.errors_for('body') %}<div class="err">body: {{ e }}</div>{% endfor %}{% endif %}
-                  <input type="hidden" name="csrf" value="{{ csrf }}">
-                  <button class="btn">Create</button>
-                </form>
+                <h2>Welcome back, {{ user.email }}!</h2>
+                <p>You're successfully authenticated with Shipy.</p>
+                <p><a href="/logout">Logout</a></p>
               </div>
               {% else %}
-                <div class="card">Log in to create posts.</div>
+              <div class="card">
+                <h2>🚀 Welcome to Shipy</h2>
+                <p>The opinionated Python web framework for shipping MVPs stupid-fast.</p>
+                
+                <h3>Get Started</h3>
+                <p>This scaffold includes:</p>
+                <ul>
+                  <li><strong>Authentication:</strong> Users, sessions, CSRF protection</li>
+                  <li><strong>Database:</strong> SQLite with auto-schema initialization</li>
+                  <li><strong>Templates:</strong> Jinja2 with sensible defaults</li>
+                  <li><strong>Forms:</strong> Built-in validation and error handling</li>
+                </ul>
+
+                <h3>Next Steps</h3>
+                <ol>
+                  <li><a href="/signup">Create an account</a> to see authenticated features</li>
+                  <li>Edit <code>app/main.py</code> to add your routes</li>
+                  <li>Modify templates in <code>app/views/</code></li>
+                  <li>Add database tables in <code>data/schema.sql</code></li>
+                </ol>
+
+                <h3>Quick Reference</h3>
+                <div class="stack">
+                  <div><strong>Routing:</strong> <code>app.get("/path", handler)</code></div>
+                  <div><strong>Database:</strong> <code>query("SELECT * FROM users")</code></div>
+                  <div><strong>Templates:</strong> <code>render_req(req, "template.html", ctx)</code></div>
+                  <div><strong>Forms:</strong> <code>Form(req.form).require("field")</code></div>
+                </div>
+              </div>
               {% endif %}
             </div>
         """,
@@ -461,3 +472,4 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
