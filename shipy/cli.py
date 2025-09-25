@@ -15,7 +15,7 @@ from shipy.sql import connect as sql_connect  # reuse PRAGMAs/row_factory
 
 # ---------- DB ----------------------------------------------------------------
 
-def cmd_db_init(db_path: str = "db/app.sqlite", schema_path: str = "db/schema.sql") -> int:
+def cmd_db_init(db_path: str = "data/app.db", schema_path: str = "data/schema.sql") -> int:
     db = Path(db_path)
     db.parent.mkdir(parents=True, exist_ok=True)
     con = sql_connect(str(db))
@@ -28,7 +28,7 @@ def cmd_db_init(db_path: str = "db/app.sqlite", schema_path: str = "db/schema.sq
     return 0
 
 
-def cmd_db_backup(db_path: str = "db/app.sqlite", out_dir: str = "db/backups") -> int:
+def cmd_db_backup(db_path: str = "data/app.db", out_dir: str = "data/backups") -> int:
     srcp = Path(db_path)
     if not srcp.exists():
         print(f"DB not found: {srcp}")
@@ -49,7 +49,7 @@ def cmd_db_backup(db_path: str = "db/app.sqlite", out_dir: str = "db/backups") -
 
 # ---------- DEV ----------------------------------------------------------------
 
-def cmd_dev(app_ref: str, host: str, port: int, reload: bool, workers: int) -> int:
+def cmd_dev(app_ref: str, host: str, port: int, reload: bool, workers: int, show_info: bool = True) -> int:
     # Ensure the current working directory is importable as top-level (so 'app.*' resolves)
     import sys
     import uvicorn  # type: ignore
@@ -62,6 +62,14 @@ def cmd_dev(app_ref: str, host: str, port: int, reload: bool, workers: int) -> i
 
     # Ensure the reload subprocess inherits the path too
     os.environ["PYTHONPATH"] = cwd + os.pathsep + os.environ.get("PYTHONPATH", "")
+
+    if show_info:
+        print(f"🚀 Shipy dev server starting...")
+        print(f"📁 Working directory: {cwd}")
+        print(f"🗄️  Database: data/app.db")
+        print(f"📋 Schema: data/schema.sql")
+        print(f"🌐 URL: http://{host}:{port}")
+        print("Press Ctrl+C to stop\n")
 
     config = uvicorn.Config(
         app_ref,
@@ -91,14 +99,14 @@ def cmd_new(name: str, *, force: bool = False) -> int:
     app = root / "app"
     views = app / "views"
     public = root / "public"
-    dbdir = root / "db"
+    dbdir = root / "data"
 
     files: dict[Path, str] = {
         root / ".gitignore": """
             __pycache__/
             *.pyc
             .env
-            db/*.sqlite*
+            data/*.db*
             .DS_Store
         """,
         # Make 'app' a real package so 'app.main:app' imports everywhere
@@ -130,12 +138,11 @@ def cmd_new(name: str, *, force: bool = False) -> int:
             )
 
             app = App()
-            connect("db/app.sqlite")
+            connect("data/app.db")
 
             def home(req):
                 user = current_user(req)
-                posts = query("SELECT id, title FROM posts ORDER BY id DESC")
-                return render_req(req, "home/index.html", user=user, posts=posts)
+                return render_req(req, "home/index.html", user=user)
 
             def signup_form(req): return render_req(req, "users/new.html")
 
@@ -178,16 +185,6 @@ def cmd_new(name: str, *, force: bool = False) -> int:
                 logout(resp)
                 return resp
 
-            async def create_post(req):
-                await req.load_body()
-                form = Form(req.form).require("title","body").min("title", 3)
-                if not form.ok:
-                    user = current_user(req)
-                    posts = query("SELECT id,title FROM posts ORDER BY id DESC")
-                    return render_req(req, "home/index.html", form=form, posts=posts, user=user)
-                with tx():
-                    exec("INSERT INTO posts(title,body) VALUES(?,?)", form["title"], form["body"])
-                return Response.redirect("/")
 
             def secret(req):
                 user = require_login(req)
@@ -200,7 +197,6 @@ def cmd_new(name: str, *, force: bool = False) -> int:
             app.get("/login", login_form)
             app.post("/login", login_post)
             app.post("/logout", logout_post)
-            app.post("/posts", create_post)
             app.get("/secret", secret)
         """,
         views / "home" / "index.html": """
@@ -300,13 +296,6 @@ def cmd_new(name: str, *, force: bool = False) -> int:
               created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-
-            CREATE TABLE IF NOT EXISTS posts (
-              id INTEGER PRIMARY KEY,
-              title TEXT NOT NULL,
-              body TEXT NOT NULL,
-              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
         """,
     }
     for path, content in files.items():
@@ -409,15 +398,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_dev.add_argument("--reload", action="store_true", default=True)
     p_dev.add_argument("--no-reload", dest="reload", action="store_false")
     p_dev.add_argument("--workers", type=int, default=1)
+    p_dev.add_argument("--show-info", action="store_true", default=True, help="Show boot info")
 
     p_db = sub.add_parser("db", help="Database utilities")
     p_db_sub = p_db.add_subparsers(dest="db_cmd", required=True)
     p_db_init = p_db_sub.add_parser("init", help="Create SQLite and run schema.sql (if present)")
-    p_db_init.add_argument("--db", default="db/app.sqlite")
-    p_db_init.add_argument("--schema", default="db/schema.sql")
+    p_db_init.add_argument("--db", default="data/app.db")
+    p_db_init.add_argument("--schema", default="data/schema.sql")
     p_db_backup = p_db_sub.add_parser("backup", help="Online backup to db/backups/")
-    p_db_backup.add_argument("--db", default="db/app.sqlite")
-    p_db_backup.add_argument("--out", default="db/backups")
+    p_db_backup.add_argument("--db", default="data/app.db")
+    p_db_backup.add_argument("--out", default="data/backups")
 
     p_dep = sub.add_parser("deploy", help="Deployment helpers")
     p_dep_sub = p_dep.add_subparsers(dest="dep_cmd", required=True)
@@ -436,7 +426,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.cmd == "new":
         return cmd_new(args.name, force=args.force)
     if args.cmd == "dev":
-        return cmd_dev(args.app, args.host, args.port, args.reload, args.workers)
+        return cmd_dev(args.app, args.host, args.port, args.reload, args.workers, args.show_info)
     if args.cmd == "db" and args.db_cmd == "init":
         return cmd_db_init(args.db, args.schema)
     if args.cmd == "db" and args.db_cmd == "backup":

@@ -21,12 +21,14 @@
     </main>
 
     <div>
-      <p>sup? {{posts}}</p>
-      <ul>
-        {% for post in posts %}
-        <li>{{ post.title }}</li>
-        {% endfor %}
-      </ul>
+      {% if user %}
+      <p>Welcome back, {{ user.email }}!</p>
+      {% else %}
+      <p>
+        Welcome! Please <a href="/signup">sign up</a> or
+        <a href="/login">log in</a>.
+      </p>
+      {% endif %}
     </div>
     {% if flashes %}
     <div class="stack">
@@ -34,27 +36,18 @@
       <div class="flash {{ f.kind }}">{{ f.msg }}</div>
       {% endfor %}
     </div>
-    {% endif %}
-
-    <form method="post" action="/posts" class="stack">
-      <input class="input" name="title" placeholder="Title" />
-      <textarea class="input" name="body" placeholder="Body"></textarea>
-      <input type="hidden" name="csrf" value="{{ csrf }}" />
-      <button class="btn">Create</button>
-    </form>
-
-    <form method="post" action="/logout" style="margin-top: 12px">
-      <input type="hidden" name="csrf" value="{{ csrf }}" />
-      <button class="btn">Logout</button>
-    </form>
-
-    {% if user %}
-    <form method="post" action="/logout" style="display: inline">
-      <input type="hidden" name="csrf" value="{{ csrf }}" />
-      <button class="btn" title="{{ user.email }}">Logout</button>
-    </form>
-    {% else %}
-    <a href="/login">Login</a> • <a href="/signup">Sign up</a>
+    {% endif %} {% if user %}
+    <div style="margin-top: 20px">
+      <a href="/secret" class="btn">Secret Page</a>
+      <form
+        method="post"
+        action="/logout"
+        style="display: inline; margin-left: 10px"
+      >
+        <input type="hidden" name="csrf" value="{{ csrf }}" />
+        <button class="btn">Logout</button>
+      </form>
+    </div>
     {% endif %}
   </body>
 </html>

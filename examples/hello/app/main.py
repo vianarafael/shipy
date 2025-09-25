@@ -10,12 +10,11 @@ from shipy.auth import (
 )
 
 app = App()
-connect("db/app.sqlite")
+connect("data/app.db")
 
 def home(req):
-    posts = query("SELECT id, title FROM posts ORDER BY id DESC")
     user = current_user(req)
-    return render_req(req, "home/index.html", posts=posts, user=user)
+    return render_req(req, "home/index.html", user=user)
 
 def signup_form(req):
     return render_req(req, "users/new.html")
@@ -72,16 +71,6 @@ def secret(req):
         return Response.redirect("/login")
     return render_req(req, "secret.html", user=user)
 
-# existing posts create route (respects global CSRF already)
-async def create_post(req):
-    await req.load_body()
-    form = Form(req.form).require("title","body").min("title", 3)
-    if not form.ok:
-        posts = query("SELECT id, title FROM posts ORDER BY id DESC")
-        return render_req(req, "home/index.html", posts=posts, form=form, user=current_user(req))
-    with tx():
-        exec("INSERT INTO posts(title, body) VALUES(?,?)", form["title"], form["body"])
-    return Response.redirect("/")
 
 # Routes
 app.get("/", home)
@@ -93,4 +82,3 @@ app.post("/login", login_post)
 app.post("/logout", logout_post)
 
 app.get("/secret", secret)
-app.post("/posts", create_post)
