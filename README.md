@@ -1,26 +1,26 @@
 # Shipy
 
-Tiny Python web toolkit + CLI.
+The opinionated Indie Maker Python web framework for shipping MVPs stupid-fast.
 
 - App, Request, Response, routing (imperative)
 - Jinja2 templates via `shipy.render.render()`
 - SQLite helpers in `shipy.sql` (`query`, `one`, `execute`, `tx`)
+- Built-in auth with users/sessions
 - Signed-cookie sessions with CSRF + flash in `shipy.session`
-- CLI: `shipy new`, `shipy dev`, `shipy db apply`, `shipy deploy`
+- CLI: `shipy new`, `shipy dev`, `shipy db init`, `shipy deploy`
 
 Note: The SQL write helper is named `execute` (not `exec`, since `exec` is a Python keyword).
 
 ## Quick start
 
-- Install dependencies: `pip install jinja2 itsdangerous uvicorn watchfiles`
-- Scaffold a new app:
-  - `shipy new myapp`
-  - `cd myapp`
-  - `shipy dev`
-- Or try the included example:
-  - `cd examples/hello`
-  - `shipy dev` (uses uvicorn + autoreload if installed)
-  - Or: `uvicorn examples.hello.app.main:asgi --reload`
+```bash
+pip install shipy-web
+shipy new myapp && cd myapp
+shipy db init
+shipy dev
+```
+
+Visit http://localhost:8000 and sign up to get started!
 
 ## Example
 
@@ -28,10 +28,11 @@ See `examples/hello/app/main.py:1` and `examples/hello/app/views/home/index.html
 
 ## CLI
 
-- `shipy new <name>` — creates a scaffolded project in `./<name>`
-- `shipy dev [--app app.main:app] [--host 127.0.0.1] [--port 5000]`
-- `shipy db apply [--db ./db/app.db] [--schema db/schema.sql]`
-- `shipy deploy` — placeholder helper
+- `shipy new <name>` — creates an auth-first scaffolded project in `./<name>`
+- `shipy dev [--app app.main:app] [--host 127.0.0.1] [--port 8000]`
+- `shipy db init [--db ./data/app.db] [--schema data/schema.sql]` — initialize database
+- `shipy db path` — show resolved database path
+- `shipy deploy` — deployment helpers
 
 ## Templates
 
@@ -45,14 +46,20 @@ Flash messages are available via `req.session.flash(message, category)` and `req
 
 ## Database
 
-SQLite helpers in `shipy/sql.py:1` use `./db/app.db` by default (created as needed).
+SQLite helpers in `shipy/sql.py:1` use `./data/app.db` by default (created as needed).
+
+Override the database path with `SHIPY_DB` environment variable:
+
+```bash
+SHIPY_DB=/path/to/custom.db shipy dev
+```
 
 - `query(sql, params=()) -> list[dict]`
 - `one(sql, params=()) -> dict | None`
 - `execute(sql, params=()) -> int`
 - `with tx() as conn: conn.execute(...)`
 
-Apply schema with `shipy db apply --schema db/schema.sql`.
+Apply schema with `shipy db init --schema data/schema.sql`.
 
 ## License
 

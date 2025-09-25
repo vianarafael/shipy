@@ -381,11 +381,26 @@ def cmd_gensecret() -> int:
     return 0
 
 
+def cmd_version() -> int:
+    """Print the current Shipy version."""
+    import importlib.metadata
+    try:
+        version = importlib.metadata.version("shipy-web")
+        print(f"shipy-web {version}")
+    except importlib.metadata.PackageNotFoundError:
+        print("shipy-web (development version)")
+    return 0
+
+
 # ---------- MAIN --------------------------------------------------------------
 
 def main(argv: Optional[list[str]] = None) -> int:
     p = argparse.ArgumentParser(prog="shipy", description="Shipy CLI")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    
+    # Add version argument
+    p.add_argument("--version", action="store_true", help="Show version and exit")
+    
+    sub = p.add_subparsers(dest="cmd", required=False)
 
     p_new = sub.add_parser("new", help="Create a new Shipy app skeleton")
     p_new.add_argument("name", help="Directory name (or path)")
@@ -422,6 +437,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_secret = sub.add_parser("gensecret", help="Generate a random SHIPY_SECRET")
 
     args = p.parse_args(argv)
+
+    # Handle version command
+    if args.version:
+        return cmd_version()
 
     if args.cmd == "new":
         return cmd_new(args.name, force=args.force)
