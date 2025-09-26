@@ -150,84 +150,29 @@ shipy db init
 mkdir -p app/views/todos
 ```
 
-**Update app/main.py:**
+### What's Already Generated vs. What You Need to Add
 
+**✅ Already in scaffold (`app/main.py`):**
+- Basic imports including `render_htmx`, `is_htmx_request`, `login_required`
+- Middleware setup with `@app.middleware("request")`
+- Auth routes (signup, login, logout)
+- Basic home route using `render_htmx`
+
+**➕ You need to add:**
+
+**1. Update the home route to include todos:**
 ```python
-# app/main.py
-from shipy.app import App, Response
-from shipy.render import render_req, render_htmx, is_htmx_request
-from shipy.sql import connect, query, one, exec, tx
-from shipy.forms import Form
-from shipy.auth import (
-    current_user, require_login, login_required,
-    hash_password, check_password,
-    login, logout,
-    too_many_login_attempts, record_login_failure, reset_login_failures
-)
-
-app = App()
-connect("data/app.db")
-
-# Middleware: attach user to request state
-@app.middleware("request")
-def attach_user_to_state(req):
-    user = current_user(req)
-    req.state.user = user
-
-@app.middleware("request")
-def add_csrf_token(req):
-    from shipy.session import get_session
-    session = get_session(req) or {}
-    req.state.csrf_token = session.get("csrf", "")
-
+# Replace the existing home function in app/main.py
 def home(req):
     user = req.state.user
     todos = query("SELECT * FROM todos ORDER BY created_at DESC") if user else []
     return render_htmx(req, "home/index.html", user=user, todos=todos)
+```
 
-# Auth routes (from scaffold)
-def signup_form(req): return render_req(req, "users/new.html")
+**2. Add todo CRUD routes:**
+```python
+# Add these new functions to app/main.py
 
-async def signup(req):
-    await req.load_body()
-    form = Form(req.form).require("email","password").min("password", 6).email("email")
-    if not form.ok: return render_req(req, "users/new.html", form=form)
-    if one("SELECT id FROM users WHERE email=?", form["email"]):
-        form.errors.setdefault("email", []).append("already registered")
-        return render_req(req, "users/new.html", form=form)
-    with tx():
-        exec("INSERT INTO users(email,password_hash) VALUES(?,?)",
-             form["email"], hash_password(form['password']))
-        u = one("SELECT id,email FROM users WHERE email=?", form["email"])
-    resp = Response.redirect("/")
-    login(req, resp, u["id"])
-    return resp
-
-def login_form(req): return render_req(req, "sessions/login.html")
-
-async def login_post(req):
-    await req.load_body()
-    form = Form(req.form).require("email","password").email("email")
-    ip = req.scope.get("client", ("",0))[0] or "unknown"
-    if too_many_login_attempts(ip):
-        form.errors.setdefault("email", []).append("too many attempts, try later")
-        return render_req(req, "sessions/login.html", form=form)
-    u = one("SELECT id,email,password_hash FROM users WHERE email=?", form["email"])
-    if not u or not check_password(form["password"], u["password_hash"]):
-        record_login_failure(ip)
-        form.errors.setdefault("email", []).append("invalid email or password")
-        return render_req(req, "sessions/login.html", form=form)
-    reset_login_failures(ip)
-    resp = Response.redirect("/")
-    login(req, resp, u["id"])
-    return resp
-
-async def logout_post(req):
-    resp = Response.redirect("/")
-    logout(resp)
-    return resp
-
-# Todo CRUD routes
 @login_required()
 def todo_list(req):
     """HTMX endpoint for todo list partial"""
@@ -273,14 +218,11 @@ async def todo_delete(req):
 
     todos = query("SELECT * FROM todos ORDER BY created_at DESC")
     return render_htmx(req, "todos/list.html", todos=todos)
+```
 
-# Routes
-app.get("/", home)
-app.get("/signup", signup_form)
-app.post("/signup", signup)
-app.get("/login", login_form)
-app.post("/login", login_post)
-app.post("/logout", logout_post)
+**3. Add the new routes:**
+```python
+# Add these route registrations at the end of app/main.py
 
 # HTMX Todo routes
 app.get("/todos", todo_list)
@@ -289,82 +231,60 @@ app.post("/todos/{id}/toggle", todo_toggle)
 app.delete("/todos/{id}", todo_delete)
 ```
 
-**Update home template:**
+### Template Updates
 
+**✅ Already in scaffold (`app/views/home/index.html`):**
+- Basic HTML structure with HTMX CDN
+- Header with navigation
+- Flash message display
+- Basic user authentication UI
+
+**➕ You need to add the todo functionality:**
+
+**1. Update the home template to include todos:**
 ```html
-<!-- app/views/home/index.html -->
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Shipy Todo App</title>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <link rel="stylesheet" href="/public/base.css" />
-  </head>
-  <body>
-    <div class="wrap">
-      <header>
-        <strong>Shipy Todo</strong>
-        <nav>
-          {% if user %}
-          <span>{{ user.email }}</span>
-          <form method="post" action="/logout" style="display:inline">
-            <input type="hidden" name="csrf" value="{{ csrf }}" />
-            <button class="btn">Logout</button>
-          </form>
-          {% else %}
-          <a href="/login">Login</a> <a href="/signup">Sign up</a>
-          {% endif %}
-        </nav>
-      </header>
+<!-- Replace the content inside the {% if user %} block in app/views/home/index.html -->
+{% if user %}
+<div class="card">
+  <h2>My Todos</h2>
 
-      {% if flashes %} {% for f in flashes %}
-      <div class="flash">{{ f.msg }}</div>
-      {% endfor %} {% endif %} {% if user %}
-      <div class="card">
-        <h2>My Todos</h2>
-
-        <!-- Todo Form -->
-        <form
-          hx-post="/todos"
-          hx-target="#todo-list"
-          hx-swap="innerHTML"
-          class="stack"
-        >
-          <input type="hidden" name="csrf" value="{{ csrf }}" />
-          <div style="display: flex; gap: 10px;">
-            <input
-              class="input"
-              name="title"
-              placeholder="New todo..."
-              style="flex: 1;"
-            />
-            <button class="btn" type="submit">Add</button>
-          </div>
-        </form>
-
-        <!-- Todo List -->
-        <div id="todo-list">{% include "todos/list.html" %}</div>
-      </div>
-      {% else %}
-      <div class="card">
-        <h2>Welcome to Shipy Todo</h2>
-        <p>
-          Please <a href="/signup">sign up</a> or <a href="/login">log in</a> to
-          manage your todos.
-        </p>
-      </div>
-      {% endif %}
+  <!-- Todo Form -->
+  <form
+    hx-post="/todos"
+    hx-target="#todo-list"
+    hx-swap="innerHTML"
+    class="stack"
+  >
+    <input type="hidden" name="csrf" value="{{ csrf }}" />
+    <div style="display: flex; gap: 10px;">
+      <input
+        class="input"
+        name="title"
+        placeholder="New todo..."
+        style="flex: 1;"
+      />
+      <button class="btn" type="submit">Add</button>
     </div>
-  </body>
-</html>
+  </form>
+
+  <!-- Todo List -->
+  <div id="todo-list">{% include "todos/list.html" %}</div>
+</div>
+{% else %}
+<div class="card">
+  <h2>Welcome to Shipy Todo</h2>
+  <p>
+    Please <a href="/signup">sign up</a> or <a href="/login">log in</a> to
+    manage your todos.
+  </p>
+</div>
+{% endif %}
 ```
 
-**Create todo list partial:**
+**2. Create the todo list partial:**
 
 ```html
-<!-- app/views/todos/list.html -->
+<!-- Create new file: app/views/todos/list.html -->
 {% if todos %}
 <div class="stack">
   {% for todo in todos %}

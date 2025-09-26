@@ -203,11 +203,11 @@ def cmd_new(name: str, *, force: bool = False) -> int:
         """,
         app / "main.py": """
             from shipy.app import App, Response
-            from shipy.render import render_req
+            from shipy.render import render_req, render_htmx, is_htmx_request
             from shipy.sql import connect, query, one, exec, tx
             from shipy.forms import Form
             from shipy.auth import (
-                current_user, require_login,
+                current_user, login_required,
                 hash_password, check_password,
                 login, logout,
                 too_many_login_attempts, record_login_failure, reset_login_failures
@@ -216,9 +216,15 @@ def cmd_new(name: str, *, force: bool = False) -> int:
             app = App()
             connect("data/app.db")
 
-            def home(req):
+            # Middleware: attach user to request state
+            @app.middleware("request")
+            def attach_user_to_state(req):
                 user = current_user(req)
-                return render_req(req, "home/index.html", user=user)
+                req.state.user = user
+
+            def home(req):
+                user = req.state.user
+                return render_htmx(req, "home/index.html", user=user)
 
             def signup_form(req): return render_req(req, "users/new.html")
 
@@ -261,12 +267,12 @@ def cmd_new(name: str, *, force: bool = False) -> int:
                 logout(resp)
                 return resp
 
-
+            @login_required()
             def secret(req):
-                user = require_login(req)
-                if not user: return Response.redirect("/login")
-                return render_req(req, "secret.html", user=user)
+                # req.state.user is guaranteed to exist here
+                return render_req(req, "secret.html", user=req.state.user)
 
+            # Routes
             app.get("/", home)
             app.get("/signup", signup_form)
             app.post("/signup", signup)
