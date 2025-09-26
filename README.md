@@ -31,7 +31,11 @@ See `examples/hello/app/main.py:1` and `examples/hello/app/views/home/index.html
 - `shipy new <name>` — creates an auth-first scaffolded project in `./<name>`
 - `shipy dev [--app app.main:app] [--host 127.0.0.1] [--port 8000]`
 - `shipy db init [--db ./data/app.db] [--schema data/schema.sql]` — initialize database
-- `shipy db path` — show resolved database path
+- `shipy db backup [--db ./data/app.db] [--out data/backups]` — create database backup
+- `shipy db run <path.sql> [--db ./data/app.db]` — execute SQL script
+- `shipy db make-migration <name> [--dir data/migrations]` — create timestamped migration file
+- `shipy db ls [--dir data/migrations]` — list migration files
+- `shipy db shell [--db ./data/app.db]` — open interactive sqlite3 shell
 - `shipy deploy` — deployment helpers
 
 ## Templates
@@ -60,6 +64,27 @@ SHIPY_DB=/path/to/custom.db shipy dev
 - `with tx() as conn: conn.execute(...)`
 
 Apply schema with `shipy db init --schema data/schema.sql`.
+
+### Migrations
+
+For one-off database changes, use the simple migration system:
+
+```bash
+# Create a migration file
+shipy db make-migration "add user profiles"
+
+# Edit the generated file in data/migrations/
+# Then apply it
+shipy db run data/migrations/20250926185037_add_user_profiles.sql
+
+# List all migrations
+shipy db ls
+
+# Open interactive sqlite3 shell for debugging
+shipy db shell
+```
+
+Migrations are plain SQL files wrapped in transactions for atomicity. No complex migration engine - just timestamped files you can read and understand.
 
 ## License
 

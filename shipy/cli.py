@@ -47,6 +47,82 @@ def cmd_db_backup(db_path: str = "data/app.db", out_dir: str = "data/backups") -
     return 0
 
 
+def cmd_db_run(db_path: str = "data/app.db", sql_path: str = "") -> int:
+    src = Path(sql_path)
+    if not src.exists():
+        print(f"SQL file not found: {src}")
+        return 2
+    con = sql_connect(db_path)
+    con.executescript(src.read_text(encoding="utf-8"))
+    print(f"✅ Ran SQL script: {src} on {db_path}")
+    return 0
+
+
+def cmd_db_make_migration(name: str, dir_path: str = "data/migrations") -> int:
+    # slugify: lower, replace spaces/hyphens with underscores, keep alnum+_
+    slug = "".join(ch.lower() if ch.isalnum() else "_" for ch in name).strip("_")
+    if not slug:
+        slug = "migration"
+    ts = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    outdir = Path(dir_path)
+    outdir.mkdir(parents=True, exist_ok=True)
+    path = outdir / f"{ts}_{slug}.sql"
+    template = f"""-- Shipy migration: {name}
+-- Created at: {datetime.datetime.now().isoformat(timespec='seconds')}
+-- Wrap changes in a single transaction for atomicity.
+
+BEGIN;
+
+-- Example:
+-- ALTER TABLE users ADD COLUMN handle TEXT;
+-- CREATE INDEX IF NOT EXISTS idx_entries_created ON entries(created_at DESC);
+
+COMMIT;
+"""
+    path.write_text(template, encoding="utf-8")
+    print(f"📝 New migration created: {path}")
+    return 0
+
+
+def cmd_db_ls(dir_path: str = "data/migrations") -> int:
+    """List migration files in chronological order."""
+    outdir = Path(dir_path)
+    if not outdir.exists():
+        print(f"📁 No migrations directory found: {outdir}")
+        return 0
+    
+    migrations = sorted(outdir.glob("*.sql"))
+    if not migrations:
+        print(f"📁 No migration files found in: {outdir}")
+        return 0
+    
+    print(f"📁 Migrations in {outdir}:")
+    for migration in migrations:
+        print(f"  {migration.name}")
+    return 0
+
+
+def cmd_db_shell(db_path: str = "data/app.db") -> int:
+    """Open an interactive sqlite3 shell."""
+    import subprocess
+    import sys
+    
+    if not Path(db_path).exists():
+        print(f"Database not found: {db_path}")
+        return 2
+    
+    try:
+        subprocess.run(["sqlite3", db_path], check=True)
+    except subprocess.CalledProcessError:
+        print("Failed to start sqlite3 shell")
+        return 1
+    except FileNotFoundError:
+        print("sqlite3 command not found. Please install sqlite3.")
+        return 1
+    
+    return 0
+
+
 # ---------- DEV ----------------------------------------------------------------
 
 def cmd_dev(app_ref: str, host: str, port: int, reload: bool, workers: int, show_info: bool = True) -> int:
@@ -435,6 +511,20 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_db_backup.add_argument("--db", default="data/app.db")
     p_db_backup.add_argument("--out", default="data/backups")
 
+    p_db_run = p_db_sub.add_parser("run", help="Execute a .sql script against the DB")
+    p_db_run.add_argument("path", help="Path to .sql file")
+    p_db_run.add_argument("--db", default="data/app.db")
+
+    p_db_make = p_db_sub.add_parser("make-migration", help="Create a timestamped SQL file in data/migrations/")
+    p_db_make.add_argument("name", help="Short name, e.g. 'add entries table'")
+    p_db_make.add_argument("--dir", default="data/migrations")
+
+    p_db_ls = p_db_sub.add_parser("ls", help="List migration files")
+    p_db_ls.add_argument("--dir", default="data/migrations")
+
+    p_db_shell = p_db_sub.add_parser("shell", help="Open interactive sqlite3 shell")
+    p_db_shell.add_argument("--db", default="data/app.db")
+
     p_dep = sub.add_parser("deploy", help="Deployment helpers")
     p_dep_sub = p_dep.add_subparsers(dest="dep_cmd", required=True)
     p_emit = p_dep_sub.add_parser("emit", help="Write systemd + nginx files to ./deploy")
@@ -461,6 +551,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         return cmd_db_init(args.db, args.schema)
     if args.cmd == "db" and args.db_cmd == "backup":
         return cmd_db_backup(args.db, args.out)
+    if args.cmd == "db" and args.db_cmd == "run":
+        return cmd_db_run(args.db, args.path)
+    if args.cmd == "db" and args.db_cmd == "make-migration":
+        return cmd_db_make_migration(args.name, args.dir)
+    if args.cmd == "db" and args.db_cmd == "ls":
+        return cmd_db_ls(args.dir)
+    if args.cmd == "db" and args.db_cmd == "shell":
+        return cmd_db_shell(args.db)
     if args.cmd == "deploy" and args.dep_cmd == "emit":
         return cmd_deploy_emit(args.path, args.service, args.domain, args.port, args.user, args.workdir)
     if args.cmd == "gensecret":
