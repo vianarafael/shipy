@@ -81,6 +81,9 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 
+# Shipy data directory (contains app databases and migrations)
+data/
+
 # Logs
 *.log
 logs/
