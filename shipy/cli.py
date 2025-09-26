@@ -276,62 +276,76 @@ def cmd_new(name: str, *, force: bool = False) -> int:
             app.get("/secret", secret)
         """,
         views / "home" / "index.html": """
-            <!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">
-            <div class="wrap">
-              <header>
-                <strong>Shipy</strong>
-                <nav>
+            <!doctype html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <title>Shipy</title>
+                <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+                <link rel="stylesheet" href="/public/base.css">
+            </head>
+            <body>
+                <div class="wrap">
+                  <header>
+                    <strong>Shipy</strong>
+                    <nav>
+                      {% if user %}
+                        <span>{{ user.email }}</span>
+                        <form method="post" action="/logout" style="display:inline">
+                          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">Logout</button>
+                        </form>
+                      {% else %}
+                        <a href="/login">Login</a> <a href="/signup">Sign up</a>
+                      {% endif %}
+                    </nav>
+                  </header>
+
+                  {% if flashes %}{% for f in flashes %}<div class="flash">{{ f.msg }}</div>{% endfor %}{% endif %}
+
                   {% if user %}
-                    <span>{{ user.email }}</span>
-                    <form method="post" action="/logout" style="display:inline">
-                      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">Logout</button>
-                    </form>
+                  <div class="card">
+                    <h2>Welcome back, {{ user.email }}!</h2>
+                    <p>You're successfully authenticated with Shipy.</p>
+                    <p><a href="/logout">Logout</a></p>
+                  </div>
                   {% else %}
-                    <a href="/login">Login</a> <a href="/signup">Sign up</a>
+                  <div class="card">
+                    <h2>🚀 Welcome to Shipy</h2>
+                    <p>The opinionated Python web framework for shipping MVPs stupid-fast.</p>
+                    
+                    <h3>Get Started</h3>
+                    <p>This scaffold includes:</p>
+                    <ul>
+                      <li><strong>Authentication:</strong> Users, sessions, CSRF protection</li>
+                      <li><strong>Database:</strong> SQLite with auto-schema initialization</li>
+                      <li><strong>Templates:</strong> Jinja2 with sensible defaults</li>
+                      <li><strong>Forms:</strong> Built-in validation and error handling</li>
+                      <li><strong>HTMX:</strong> Interactive UI without complex JavaScript</li>
+                    </ul>
+
+                    <h3>Next Steps</h3>
+                    <ol>
+                      <li><a href="/signup">Create an account</a> to see authenticated features</li>
+                      <li>Edit <code>app/main.py</code> to add your routes</li>
+                      <li>Modify templates in <code>app/views/</code></li>
+                      <li>Add database tables in <code>data/schema.sql</code></li>
+                      <li>Use <code>render_htmx()</code> for interactive components</li>
+                    </ol>
+
+                    <h3>Quick Reference</h3>
+                    <div class="stack">
+                      <div><strong>Routing:</strong> <code>app.get("/path", handler)</code></div>
+                      <div><strong>Database:</strong> <code>query("SELECT * FROM users")</code></div>
+                      <div><strong>Templates:</strong> <code>render_req(req, "template.html", ctx)</code></div>
+                      <div><strong>HTMX:</strong> <code>render_htmx(req, "template.html", ctx)</code></div>
+                      <div><strong>Forms:</strong> <code>Form(req.form).require("field")</code></div>
+                    </div>
+                  </div>
                   {% endif %}
-                </nav>
-              </header>
-
-              {% if flashes %}{% for f in flashes %}<div class="flash">{{ f.msg }}</div>{% endfor %}{% endif %}
-
-              {% if user %}
-              <div class="card">
-                <h2>Welcome back, {{ user.email }}!</h2>
-                <p>You're successfully authenticated with Shipy.</p>
-                <p><a href="/logout">Logout</a></p>
-              </div>
-              {% else %}
-              <div class="card">
-                <h2>🚀 Welcome to Shipy</h2>
-                <p>The opinionated Python web framework for shipping MVPs stupid-fast.</p>
-                
-                <h3>Get Started</h3>
-                <p>This scaffold includes:</p>
-                <ul>
-                  <li><strong>Authentication:</strong> Users, sessions, CSRF protection</li>
-                  <li><strong>Database:</strong> SQLite with auto-schema initialization</li>
-                  <li><strong>Templates:</strong> Jinja2 with sensible defaults</li>
-                  <li><strong>Forms:</strong> Built-in validation and error handling</li>
-                </ul>
-
-                <h3>Next Steps</h3>
-                <ol>
-                  <li><a href="/signup">Create an account</a> to see authenticated features</li>
-                  <li>Edit <code>app/main.py</code> to add your routes</li>
-                  <li>Modify templates in <code>app/views/</code></li>
-                  <li>Add database tables in <code>data/schema.sql</code></li>
-                </ol>
-
-                <h3>Quick Reference</h3>
-                <div class="stack">
-                  <div><strong>Routing:</strong> <code>app.get("/path", handler)</code></div>
-                  <div><strong>Database:</strong> <code>query("SELECT * FROM users")</code></div>
-                  <div><strong>Templates:</strong> <code>render_req(req, "template.html", ctx)</code></div>
-                  <div><strong>Forms:</strong> <code>Form(req.form).require("field")</code></div>
                 </div>
-              </div>
-              {% endif %}
-            </div>
+            </body>
+            </html>
         """,
         views / "sessions" / "login.html": """
             <!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">

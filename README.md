@@ -4,6 +4,7 @@ The opinionated Indie Maker Python web framework for shipping MVPs stupid-fast.
 
 - App, Request, Response, routing (imperative)
 - Jinja2 templates via `shipy.render.render()`
+- HTMX support for interactive UI without complex JavaScript
 - SQLite helpers in `shipy.sql` (`query`, `one`, `execute`, `tx`)
 - Built-in auth with users/sessions + `@login_required` decorator
 - Request middleware for per-request data and short-circuiting
@@ -42,6 +43,53 @@ See `examples/hello/app/main.py:1` and `examples/hello/app/views/home/index.html
 ## Templates
 
 Default template root is `app/views`. Use `shipy.render.render('path/to/template.html', ctx, request=req)`.
+
+### HTMX Support
+
+Shipy includes built-in HTMX support for interactive UI without complex JavaScript:
+
+```python
+from shipy.render import render_htmx, is_htmx_request
+
+# Use render_htmx for HTMX-enhanced templates
+def home(req):
+    todos = query("SELECT * FROM todos ORDER BY created_at DESC")
+    return render_htmx(req, "home/index.html", todos=todos)
+
+# Check if request is from HTMX
+def todo_create(req):
+    if is_htmx_request(req):
+        # Return partial for HTMX
+        return render_htmx(req, "todos/list.html", todos=todos)
+    else:
+        # Return full page
+        return render_req(req, "home/index.html", todos=todos)
+```
+
+HTMX templates have access to `htmx` context:
+
+- `htmx.request` - true if request is from HTMX
+- `htmx.target` - HTMX target element
+- `htmx.trigger` - HTMX trigger event
+
+```html
+<!-- HTMX form with partial updates -->
+<form hx-post="/todos" hx-target="#todo-list" hx-swap="innerHTML">
+  <input name="title" placeholder="New todo" />
+  <button>Add</button>
+</form>
+
+<div id="todo-list">
+  {% for todo in todos %}
+  <div hx-delete="/todos/{{ todo.id }}" hx-target="this" hx-swap="outerHTML">
+    {{ todo.title }}
+    <button>Delete</button>
+  </div>
+  {% endfor %}
+</div>
+```
+
+HTMX is included by default in scaffolded apps via CDN.
 
 ## Middleware
 

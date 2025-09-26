@@ -1,0 +1,37 @@
+{% if todos %}
+<div class="stack">
+  {% for todo in todos %}
+  <div class="card" style="display: flex; align-items: center; gap: 10px">
+    <input
+      type="checkbox"
+      {%
+      if
+      todo.done
+      %}checked{%
+      endif
+      %}
+      hx-post="/todos/{{ todo.id }}/toggle"
+      hx-target="#todo-list"
+      hx-swap="innerHTML"
+    />
+    <span
+      style="flex: 1; {% if todo.done %}text-decoration: line-through; opacity: 0.6;{% endif %}"
+    >
+      {{ todo.title }}
+    </span>
+    <button
+      class="btn"
+      style="background: #dc2626; padding: 4px 8px; font-size: 12px"
+      hx-delete="/todos/{{ todo.id }}"
+      hx-target="#todo-list"
+      hx-swap="innerHTML"
+      hx-confirm="Delete this todo?"
+    >
+      Delete
+    </button>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="muted">No todos yet. Add one above!</div>
+{% endif %}

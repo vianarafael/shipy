@@ -51,3 +51,35 @@ def render_req(req, template: str, **ctx) -> Response:
     html = _env().get_template(template).render(csrf=csrf, flashes=flashes, **ctx)
     resp.body = html.encode()
     return resp
+
+def is_htmx_request(req) -> bool:
+    """Check if request is from HTMX"""
+    return req.headers.get('hx-request') == 'true'
+
+def render_htmx(req, template: str, **ctx) -> Response:
+    """
+    Render with HTMX context:
+    - Includes all render_req functionality
+    - Adds HTMX context variables to template
+    Exposes `htmx` object with request info.
+    """
+    resp = Response.html("")
+    csrf = ensure_token(req, resp)
+    flashes = pull(req, resp)
+    
+    # HTMX context
+    htmx = {
+        'request': is_htmx_request(req),
+        'target': req.headers.get('hx-target', 'body'),
+        'trigger': req.headers.get('hx-trigger'),
+        'current_url': req.headers.get('hx-current-url', req.path),
+    }
+    
+    html = _env().get_template(template).render(
+        csrf=csrf, 
+        flashes=flashes, 
+        htmx=htmx,
+        **ctx
+    )
+    resp.body = html.encode()
+    return resp

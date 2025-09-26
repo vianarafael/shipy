@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Shipy • Hello</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <link rel="stylesheet" href="/public/base.css" />
   </head>
   <body>
@@ -47,6 +48,33 @@
         <input type="hidden" name="csrf" value="{{ csrf }}" />
         <button class="btn">Logout</button>
       </form>
+    </div>
+
+    <!-- HTMX Todo List -->
+    <div class="card" style="margin-top: 20px">
+      <h3>My Todos</h3>
+
+      <!-- Todo Form -->
+      <form
+        hx-post="/todos"
+        hx-target="#todo-list"
+        hx-swap="innerHTML"
+        class="stack"
+      >
+        <input type="hidden" name="csrf" value="{{ csrf }}" />
+        <div style="display: flex; gap: 10px">
+          <input
+            class="input"
+            name="title"
+            placeholder="New todo..."
+            style="flex: 1"
+          />
+          <button class="btn" type="submit">Add</button>
+        </div>
+      </form>
+
+      <!-- Todo List -->
+      <div id="todo-list">{% include "todos/list.html" %}</div>
     </div>
     {% endif %}
   </body>

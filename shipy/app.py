@@ -103,7 +103,9 @@ class App:
 
     def get(self, path, handler):   self.add("GET",  path, handler)
     def post(self, path, handler):  self.add("POST", path, handler)
-    # (add put/patch/delete helpers later if needed)
+    def put(self, path, handler):   self.add("PUT",  path, handler)
+    def patch(self, path, handler): self.add("PATCH", path, handler)
+    def delete(self, path, handler): self.add("DELETE", path, handler)
 
     def middleware(self, phase: str):
         if phase != "request":
@@ -254,6 +256,14 @@ class Response:
     @classmethod
     def redirect(cls, location, status=303):
         return cls(b"", status, headers=[(b"location", location.encode())])
+    @classmethod
+    def htmx_redirect(cls, location, target="#main"):
+        """HTMX redirect - updates browser URL without full page reload"""
+        return cls(b"", 200, headers=[(b"hx-redirect", location.encode())])
+    @classmethod
+    def htmx_refresh(cls):
+        """HTMX refresh - triggers a page refresh"""
+        return cls(b"", 200, headers=[(b"hx-refresh", b"true")])
 
 
 class Request:

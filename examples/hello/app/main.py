@@ -1,5 +1,5 @@
 from shipy.app import App, Response
-from shipy.render import render_req
+from shipy.render import render_req, render_htmx, is_htmx_request
 from shipy.sql import connect, query, one, exec, tx
 from shipy.forms import Form
 from shipy.auth import (
@@ -28,7 +28,8 @@ def add_csrf_token(req):
 def home(req):
     # User is now available via middleware in req.state.user
     user = req.state.user
-    return render_req(req, "home/index.html", user=user)
+    todos = query("SELECT * FROM todos ORDER BY created_at DESC") if user else []
+    return render_htmx(req, "home/index.html", user=user, todos=todos)
 
 def signup_form(req):
     return render_req(req, "users/new.html")
@@ -84,6 +85,57 @@ def secret(req):
     # req.state.user is guaranteed to exist here via @login_required
     return render_req(req, "secret.html", user=req.state.user)
 
+# HTMX Todo routes
+@login_required()
+def todo_list(req):
+    """HTMX endpoint for todo list partial"""
+    todos = query("SELECT * FROM todos ORDER BY created_at DESC")
+    return render_htmx(req, "todos/list.html", todos=todos)
+
+@login_required()
+async def todo_create(req):
+    """HTMX endpoint for creating todos"""
+    await req.load_body()
+    form = Form(req.form).require("title")
+    if not form.ok:
+        return render_htmx(req, "todos/form.html", form=form)
+    
+    with tx():
+        exec("INSERT INTO todos(title, done) VALUES(?, ?)", form["title"], False)
+    
+    # Return updated list
+    todos = query("SELECT * FROM todos ORDER BY created_at DESC")
+    return render_htmx(req, "todos/list.html", todos=todos)
+
+@login_required()
+async def todo_toggle(req):
+    """HTMX endpoint for toggling todo done status"""
+    todo_id = req.path_params.get("id")
+    if not todo_id:
+        return Response.text("Todo ID required", 400)
+    
+    # Toggle the todo
+    with tx():
+        exec("UPDATE todos SET done = NOT done WHERE id = ?", int(todo_id))
+    
+    # Return updated list
+    todos = query("SELECT * FROM todos ORDER BY created_at DESC")
+    return render_htmx(req, "todos/list.html", todos=todos)
+
+@login_required()
+async def todo_delete(req):
+    """HTMX endpoint for deleting todos"""
+    todo_id = req.path_params.get("id")
+    if not todo_id:
+        return Response.text("Todo ID required", 400)
+    
+    with tx():
+        exec("DELETE FROM todos WHERE id = ?", int(todo_id))
+    
+    # Return updated list
+    todos = query("SELECT * FROM todos ORDER BY created_at DESC")
+    return render_htmx(req, "todos/list.html", todos=todos)
+
 
 # Routes
 app.get("/", home)
@@ -95,3 +147,9 @@ app.post("/login", login_post)
 app.post("/logout", logout_post)
 
 app.get("/secret", secret)
+
+# HTMX Todo routes
+app.get("/todos", todo_list)
+app.post("/todos", todo_create)
+app.post("/todos/{id}/toggle", todo_toggle)
+app.delete("/todos/{id}", todo_delete)
