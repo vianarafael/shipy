@@ -55,6 +55,28 @@ def require_login(req):
     """Return user dict or None. Handlers can branch or redirect."""
     return current_user(req)
 
+def login_required(redirect_to="/login"):
+    """Decorator that requires authentication. Redirects to login by default.
+    
+    Usage:
+        @app.get("/secret")
+        @login_required()
+        def secret(req):
+            # req.state.user is guaranteed to exist here
+            return render_req(req, "secret.html", user=req.state.user)
+    """
+    def decorator(handler):
+        def wrapper(req):
+            user = current_user(req)
+            if not user:
+                from .app import Response
+                return Response.redirect(redirect_to)
+            # Attach user to request state for convenience
+            req.state.user = user
+            return handler(req)
+        return wrapper
+    return decorator
+
 # --- Simple rate limit for login attempts -------------------------------------
 # 5 failures per 5 minutes per IP.
 def too_many_login_attempts(ip: str, window_sec=300, limit=5) -> bool:

@@ -5,7 +5,8 @@ The opinionated Indie Maker Python web framework for shipping MVPs stupid-fast.
 - App, Request, Response, routing (imperative)
 - Jinja2 templates via `shipy.render.render()`
 - SQLite helpers in `shipy.sql` (`query`, `one`, `execute`, `tx`)
-- Built-in auth with users/sessions
+- Built-in auth with users/sessions + `@login_required` decorator
+- Request middleware for per-request data and short-circuiting
 - Signed-cookie sessions with CSRF + flash in `shipy.session`
 - CLI: `shipy new`, `shipy dev`, `shipy db init`, `shipy deploy`
 
@@ -42,11 +43,76 @@ See `examples/hello/app/main.py:1` and `examples/hello/app/views/home/index.html
 
 Default template root is `app/views`. Use `shipy.render.render('path/to/template.html', ctx, request=req)`.
 
+## Middleware
+
+Request middleware runs on every request after the Request is constructed but before route handlers. Use `@app.middleware("request")` to register middleware functions.
+
+```python
+# Attach commonly used data to req.state
+@app.middleware("request")
+def attach_user(req):
+    req.state.user = current_user(req)
+    req.state.csrf_token = get_csrf_token(req)
+
+# Short-circuit with a Response (e.g., maintenance mode)
+@app.middleware("request")
+def maintenance_mode(req):
+    if maintenance_enabled:
+        return Response.text("Site under maintenance", 503)
+
+# Use in route handlers
+def home(req):
+    user = req.state.user  # Available via middleware
+    return render_req(req, "home.html", user=user)
+```
+
+Middleware can:
+
+- Attach data to `req.state` for easy access in handlers
+- Short-circuit requests by returning a Response
+- Handle errors and logging
+- Add per-request objects (DB connections, etc.)
+
 ## Sessions
 
 Session data is stored in a signed cookie using `itsdangerous`. Set `SHIPY_SECRET` in your environment for production.
 
 Flash messages are available via `req.session.flash(message, category)` and `req.session.get_flashed_messages()` in requests. CSRF token via `req.session.get_csrf_token()`.
+
+### Authentication
+
+Shipy includes built-in authentication helpers:
+
+```python
+from shipy.auth import current_user, login_required, login, logout
+
+# Check if user is logged in
+user = current_user(req)
+
+# Protect routes with @login_required decorator
+@login_required()
+def secret(req):
+    # req.state.user is guaranteed to exist here
+    return render_req(req, "secret.html", user=req.state.user)
+
+# Custom redirect for unauthenticated users
+@login_required(redirect_to="/custom-login")
+def admin(req):
+    return render_req(req, "admin.html", user=req.state.user)
+
+# Manual authentication (for custom logic)
+def manual_auth(req):
+    user = current_user(req)
+    if not user:
+        return Response.redirect("/login")
+    return render_req(req, "page.html", user=user)
+```
+
+The `@login_required` decorator:
+
+- Redirects unauthenticated users to `/login` (or custom path)
+- Automatically attaches user to `req.state.user`
+- Works with middleware for additional per-request data
 
 ## Database
 

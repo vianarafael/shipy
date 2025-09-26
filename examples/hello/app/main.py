@@ -3,7 +3,7 @@ from shipy.render import render_req
 from shipy.sql import connect, query, one, exec, tx
 from shipy.forms import Form
 from shipy.auth import (
-    current_user, require_login,
+    current_user, require_login, login_required,
     hash_password, check_password,
     login, logout,
     too_many_login_attempts, record_login_failure, reset_login_failures
@@ -12,8 +12,22 @@ from shipy.auth import (
 app = App()
 connect("data/app.db")
 
-def home(req):
+# Example middleware: attach user to request state for easy access
+@app.middleware("request")
+def attach_user_to_state(req):
     user = current_user(req)
+    req.state.user = user
+
+# Example middleware: add CSRF token to request state
+@app.middleware("request")
+def add_csrf_token(req):
+    from shipy.session import get_session
+    session = get_session(req) or {}
+    req.state.csrf_token = session.get("csrf", "")
+
+def home(req):
+    # User is now available via middleware in req.state.user
+    user = req.state.user
     return render_req(req, "home/index.html", user=user)
 
 def signup_form(req):
@@ -65,11 +79,10 @@ async def logout_post(req):
     logout(resp)
     return resp
 
+@login_required()
 def secret(req):
-    user = require_login(req)
-    if not user:
-        return Response.redirect("/login")
-    return render_req(req, "secret.html", user=user)
+    # req.state.user is guaranteed to exist here via @login_required
+    return render_req(req, "secret.html", user=req.state.user)
 
 
 # Routes

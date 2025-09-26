@@ -1,5 +1,5 @@
 # shipy/app.py
-import re, inspect, os, mimetypes, traceback, html
+import re, inspect, os, mimetypes, traceback, html, types
 from urllib.parse import parse_qs
 from http import cookies as http_cookies
 from pathlib import Path
@@ -87,6 +87,7 @@ a{{color:#60a5fa}}
 class App:
     def __init__(self):
         self.routes = []  # list of (method, compiled_regex, handler)
+        self._request_mw = []  # list of callables(req) -> Optional[Response]
 
     def _compile_path(self, path: str) -> re.Pattern:
         # {id:int}  -> (?P<id>\d+)
@@ -103,6 +104,14 @@ class App:
     def get(self, path, handler):   self.add("GET",  path, handler)
     def post(self, path, handler):  self.add("POST", path, handler)
     # (add put/patch/delete helpers later if needed)
+
+    def middleware(self, phase: str):
+        if phase != "request":
+            raise ValueError("Only 'request' middleware is supported")
+        def decorator(fn):
+            self._request_mw.append(fn)
+            return fn
+        return decorator
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -138,6 +147,21 @@ class App:
         if chosen:
             handler, params, head_shim = chosen
             req = Request(scope, receive, params)
+
+            # Run request middleware (can mutate req.state or return a Response)
+            for mw in self._request_mw:
+                try:
+                    maybe = mw(req)
+                    if inspect.isawaitable(maybe):
+                        maybe = await maybe
+                    if isinstance(maybe, Response):
+                        return await maybe(scope, receive, send)  # short-circuit
+                except Exception as exc:
+                    if DEBUG:
+                        html_page = _pretty_tb_html(exc)
+                        return await Response.html(html_page, 500)(scope, receive, send)
+                    tpl = _read_error_template("500")
+                    return await (Response.html(tpl, 500) if tpl else Response.text("Internal Server Error", 500))(scope, receive, send)
 
             # Global CSRF guard for unsafe methods (form posts)
             if method in UNSAFE_METHODS:
@@ -246,6 +270,7 @@ class Request:
         self._body = None
         self.form = {}
         self.cookies = {}
+        self.state = types.SimpleNamespace()  # per-request storage
         for k, v in scope.get("headers", []):
             if k.lower() == b"cookie":
                 jar = http_cookies.SimpleCookie()
