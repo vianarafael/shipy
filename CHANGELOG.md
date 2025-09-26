@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2024-12-26
+
+### Added
+
+- **Database Migration System**: `shipy db run`, `shipy db make-migration`, `shipy db ls`, `shipy db shell` commands
+- **Middleware Support**: `@app.middleware("request")` decorator with `req.state` for per-request storage
+- **Authentication Decorator**: `@login_required()` decorator for route protection with automatic redirects
+- **HTMX Support**: `render_htmx()`, `is_htmx_request()`, HTMX response helpers (`htmx_redirect`, `htmx_refresh`)
+- **Additional HTTP Methods**: `app.put()`, `app.patch()`, `app.delete()` route registration
+- **Comprehensive Documentation**: Complete API reference (`docs.md`) and step-by-step tutorial (`tutorial.md`)
+- **Enhanced CLI**: New database management commands and improved development workflow
+
+### Changed
+
+- **Template Rendering**: Added HTMX-aware rendering with `htmx` context object
+- **Request Object**: Added `req.state` for per-request data storage
+- **Response Class**: Added HTMX-specific response methods
+- **Scaffold Templates**: Updated to include HTMX CDN and modern examples
+
+### Fixed
+
+- **Documentation**: Complete API reference with examples for all functions
+- **Tutorial**: Comprehensive guide for building production-ready applications
+- **CLI Help**: Updated help text and command descriptions
+
 ## [0.2.1] - 2024-12-19
 
 ### Added
