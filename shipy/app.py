@@ -281,12 +281,17 @@ class Request:
         self.form = {}
         self.cookies = {}
         self.state = types.SimpleNamespace()  # per-request storage
+        
+        # Parse headers into a dict
+        self.headers = {}
         for k, v in scope.get("headers", []):
-            if k.lower() == b"cookie":
+            key = k.decode().lower()
+            value = v.decode()
+            self.headers[key] = value
+            if key == "cookie":
                 jar = http_cookies.SimpleCookie()
-                jar.load(v.decode())
+                jar.load(value)
                 self.cookies = {n: morsel.value for n, morsel in jar.items()}
-                break
 
     async def load_body(self):
         if self._body is not None:
