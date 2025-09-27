@@ -6,6 +6,12 @@
 # 1. Install & scaffold
 pip install shipy-web
 shipy new todoapp && cd todoapp
+
+# Set up virtual environment (recommended)
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install shipy-web
+
 shipy db init
 
 # 2. Add todos table (Windows: use type instead of echo)
@@ -151,6 +157,7 @@ mkdir -p app/views/todos
 **➕ You need to add:**
 
 **1. Add a helper function for reliable user access:**
+
 ```python
 # Add this helper function to app/main.py
 def get_user_safely(req):
@@ -163,6 +170,7 @@ def get_user_safely(req):
 ```
 
 **2. Update the home route to include todos:**
+
 ```python
 # Replace the existing home function in app/main.py
 def home(req):
