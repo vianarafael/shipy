@@ -24,6 +24,60 @@ shipy dev
 
 Visit http://localhost:8000 and sign up to get started!
 
+## Coding Standards
+
+### Code Organization
+Use section comments to organize your code for better readability:
+
+**Python files (`app/main.py`):**
+```python
+# ---- Imports ----
+from shipy.app import App, Response
+
+# ---- App Setup ----
+app = App()
+
+# ---- Utilities ----
+def helper_function():
+    pass
+
+# ---- Middleware ----
+@app.middleware("request")
+def my_middleware(req):
+    pass
+
+# ---- Route Handlers ----
+def home(req):
+    pass
+
+# ---- Routes ----
+app.get("/", home)
+```
+
+**HTML templates:**
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- ---- Meta & Head ---- -->
+    <meta charset="utf-8">
+    <title>Page Title</title>
+</head>
+<body>
+    <!-- ---- Header ---- -->
+    <header>...</header>
+    
+    <!-- ---- Main Content ---- -->
+    <main>...</main>
+    
+    <!-- ---- Footer ---- -->
+    <footer>...</footer>
+</body>
+</html>
+```
+
+This consistent organization makes code easier to navigate and maintain.
+
 ## Example
 
 See `examples/hello/app/main.py:1` and `examples/hello/app/views/home/index.html:1`.

@@ -206,6 +206,7 @@ def cmd_new(name: str, *, force: bool = False) -> int:
             <!doctype html>
             <html>
             <head>
+                <!-- ---- Meta & Head ---- -->
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 <title>Shipy</title>
@@ -214,6 +215,7 @@ def cmd_new(name: str, *, force: bool = False) -> int:
             </head>
             <body>
                 <div class="wrap">
+                  <!-- ---- Header ---- -->
                   <header>
                     <strong>Shipy</strong>
                     <nav>
@@ -228,8 +230,10 @@ def cmd_new(name: str, *, force: bool = False) -> int:
                     </nav>
                   </header>
 
+                  <!-- ---- Flash Messages ---- -->
                   {% if flashes %}{% for f in flashes %}<div class="flash">{{ f.msg }}</div>{% endfor %}{% endif %}
 
+                  <!-- ---- Main Content ---- -->
                   {% if user %}
                   <div class="card">
                     <h2>Welcome back, {{ user.email }}!</h2>
@@ -277,7 +281,10 @@ def cmd_new(name: str, *, force: bool = False) -> int:
         views / "sessions" / "login.html": """
             <!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">
             <div class="wrap">
+              <!-- ---- Page Header ---- -->
               <h1>Log in</h1>
+              
+              <!-- ---- Login Form ---- -->
               <form method="post" action="/login" class="stack">
                 <label>Email <input class="input" name="email" value="{{ form['email'] if form else '' }}"></label>
                 {% if form %}{% for e in form.errors_for('email') %}<div class="err">email: {{ e }}</div>{% endfor %}{% endif %}
@@ -286,13 +293,18 @@ def cmd_new(name: str, *, force: bool = False) -> int:
                 <input type="hidden" name="csrf" value="{{ csrf }}">
                 <button class="btn">Log in</button>
               </form>
+              
+              <!-- ---- Navigation ---- -->
               <p>No account? <a href="/signup">Sign up</a></p>
             </div>
         """,
         views / "users" / "new.html": """
             <!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">
             <div class="wrap">
+              <!-- ---- Page Header ---- -->
               <h1>Sign up</h1>
+              
+              <!-- ---- Signup Form ---- -->
               <form method="post" action="/signup" class="stack">
                 <label>Email <input class="input" name="email" value="{{ form['email'] if form else '' }}"></label>
                 {% if form %}{% for e in form.errors_for('email') %}<div class="err">email: {{ e }}</div>{% endfor %}{% endif %}
@@ -301,12 +313,20 @@ def cmd_new(name: str, *, force: bool = False) -> int:
                 <input type="hidden" name="csrf" value="{{ csrf }}">
                 <button class="btn">Create account</button>
               </form>
+              
+              <!-- ---- Navigation ---- -->
               <p>Have an account? <a href="/login">Log in</a></p>
             </div>
         """,
         views / "secret.html": """
             <!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">
-            <div class="wrap"><h1>Secret</h1><p>Hello {{ user.email }}!</p></div>
+            <div class="wrap">
+              <!-- ---- Page Header ---- -->
+              <h1>Secret</h1>
+              
+              <!-- ---- Content ---- -->
+              <p>Hello {{ user.email }}!</p>
+            </div>
         """,
         views / "errors" / "404.html": """
             <!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/public/base.css">
@@ -329,6 +349,7 @@ def cmd_new(name: str, *, force: bool = False) -> int:
     
     # Add main.py content separately to avoid syntax issues
     main_py_content = """
+            # ---- Imports ----
             from shipy.app import App, Response
             from shipy.render import render_req, render_htmx, is_htmx_request
             from shipy.sql import connect, query, one, exec, tx
@@ -340,10 +361,11 @@ def cmd_new(name: str, *, force: bool = False) -> int:
                 too_many_login_attempts, record_login_failure, reset_login_failures
             )
 
+            # ---- App Setup ----
             app = App()
             connect("data/app.db")
 
-            # Helper function for reliable user access
+            # ---- Utilities ----
             def get_user_safely(req):
                 \"\"\"Get user from state or fetch directly if not available.\"\"\"
                 if hasattr(req.state, 'user'):
@@ -352,12 +374,13 @@ def cmd_new(name: str, *, force: bool = False) -> int:
                 req.state.user = user  # Cache for future use
                 return user
 
-            # Middleware: attach user to request state (optional)
+            # ---- Middleware ----
             @app.middleware("request")
             def attach_user_to_state(req):
                 user = current_user(req)
                 req.state.user = user
 
+            # ---- Route Handlers ----
             def home(req):
                 user = get_user_safely(req)  # Reliable user access
                 return render_htmx(req, "home/index.html", user=user)
@@ -409,7 +432,7 @@ def cmd_new(name: str, *, force: bool = False) -> int:
                 user = get_user_safely(req)  # Reliable user access
                 return render_req(req, "secret.html", user=user)
 
-            # Routes
+            # ---- Routes ----
             app.get("/", home)
             app.get("/signup", signup_form)
             app.post("/signup", signup)

@@ -14,6 +14,97 @@
 - [CLI Commands](#cli-commands)
 - [Configuration](#configuration)
 - [Error Handling](#error-handling)
+- [Coding Standards](#coding-standards)
+
+## Coding Standards
+
+### Code Organization
+
+Shipy follows consistent code organization patterns to improve readability and maintainability.
+
+#### Python Files
+
+Use section comments to organize your code:
+
+```python
+# ---- Imports ----
+from shipy.app import App, Response
+from shipy.render import render_req
+from shipy.sql import query, one, exec
+
+# ---- App Setup ----
+app = App()
+connect("data/app.db")
+
+# ---- Utilities ----
+def get_user_safely(req):
+    """Helper function for reliable user access."""
+    pass
+
+# ---- Middleware ----
+@app.middleware("request")
+def attach_user_to_state(req):
+    """Attach user to request state."""
+    pass
+
+# ---- Route Handlers ----
+def home(req):
+    """Home page handler."""
+    pass
+
+def login_form(req):
+    """Login form handler."""
+    pass
+
+# ---- Routes ----
+app.get("/", home)
+app.get("/login", login_form)
+```
+
+#### HTML Templates
+
+Use HTML comments to organize template sections:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- ---- Meta & Head ---- -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Page Title</title>
+    <link rel="stylesheet" href="/public/base.css">
+</head>
+<body>
+    <div class="wrap">
+        <!-- ---- Header ---- -->
+        <header>
+            <h1>App Name</h1>
+            <nav>...</nav>
+        </header>
+        
+        <!-- ---- Flash Messages ---- -->
+        {% if flashes %}{% for f in flashes %}<div class="flash">{{ f.msg }}</div>{% endfor %}{% endif %}
+        
+        <!-- ---- Main Content ---- -->
+        <main>
+            <h2>Page Content</h2>
+            <p>...</p>
+        </main>
+        
+        <!-- ---- Footer ---- -->
+        <footer>...</footer>
+    </div>
+</body>
+</html>
+```
+
+#### Benefits
+
+- **Consistency**: All Shipy projects follow the same organization pattern
+- **Readability**: Easy to locate specific sections of code
+- **Maintainability**: Clear separation of concerns
+- **Onboarding**: New developers can quickly understand project structure
 
 ## Core Application
 
