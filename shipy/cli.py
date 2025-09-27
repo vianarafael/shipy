@@ -216,14 +216,23 @@ def cmd_new(name: str, *, force: bool = False) -> int:
             app = App()
             connect("data/app.db")
 
-            # Middleware: attach user to request state
+            # Helper function for reliable user access
+            def get_user_safely(req):
+                """Get user from state or fetch directly if not available."""
+                if hasattr(req.state, 'user'):
+                    return req.state.user
+                user = current_user(req)
+                req.state.user = user  # Cache for future use
+                return user
+
+            # Middleware: attach user to request state (optional)
             @app.middleware("request")
             def attach_user_to_state(req):
                 user = current_user(req)
                 req.state.user = user
 
             def home(req):
-                user = req.state.user
+                user = get_user_safely(req)  # Reliable user access
                 return render_htmx(req, "home/index.html", user=user)
 
             def signup_form(req): return render_req(req, "users/new.html")
@@ -270,7 +279,8 @@ def cmd_new(name: str, *, force: bool = False) -> int:
             @login_required()
             def secret(req):
                 # req.state.user is guaranteed to exist here
-                return render_req(req, "secret.html", user=req.state.user)
+                user = get_user_safely(req)  # Reliable user access
+                return render_req(req, "secret.html", user=user)
 
             # Routes
             app.get("/", home)

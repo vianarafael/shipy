@@ -150,19 +150,30 @@ mkdir -p app/views/todos
 
 **➕ You need to add:**
 
-**1. Update the home route to include todos:**
+**1. Add a helper function for reliable user access:**
+```python
+# Add this helper function to app/main.py
+def get_user_safely(req):
+    """Get user from state or fetch directly if not available."""
+    if hasattr(req.state, 'user'):
+        return req.state.user
+    user = current_user(req)
+    req.state.user = user  # Cache for future use
+    return user
+```
 
+**2. Update the home route to include todos:**
 ```python
 # Replace the existing home function in app/main.py
 def home(req):
-    user = req.state.user
+    user = get_user_safely(req)  # Reliable user access
     todos = query("SELECT * FROM todos ORDER BY created_at DESC") if user else []
     return render_htmx(req, "home/index.html", user=user, todos=todos)
 ```
 
-**2. Add todo CRUD routes:**
+**3. Add todo CRUD routes:**
 
-```python
+````python
 # Add these new functions to app/main.py
 
 @login_required()
@@ -204,7 +215,7 @@ async def todo_update(req):
     todo_id = req.path_params.get("id")
     if not todo_id:
         return Response.text("Todo ID required", 400)
-    
+
     await req.load_body()
     form = Form(req.form).require("title")
     if not form.ok:
@@ -229,7 +240,7 @@ async def todo_delete(req):
     todos = query("SELECT * FROM todos ORDER BY created_at DESC")
     return render_htmx(req, "todos/list.html", todos=todos)
 
-**3. Add the new routes:**
+**4. Add the new routes:**
 
 ```python
 # Add these route registrations at the end of app/main.py
@@ -240,7 +251,7 @@ app.post("/todos", todo_create)
 app.post("/todos/{id}/toggle", todo_toggle)
 app.put("/todos/{id}", todo_update)
 app.delete("/todos/{id}", todo_delete)
-```
+````
 
 ### Template Updates
 
@@ -282,15 +293,16 @@ app.delete("/todos/{id}", todo_delete)
 
   <!-- Todo List -->
   <div id="todo-list">{% include "todos/list.html" %}</div>
-{% else %}
-<div class="card">
-  <h2>Welcome to Shipy Todo</h2>
-  <p>
-    Please <a href="/signup">sign up</a> or <a href="/login">log in</a> to
-    manage your todos.
-  </p>
+  {% else %}
+  <div class="card">
+    <h2>Welcome to Shipy Todo</h2>
+    <p>
+      Please <a href="/signup">sign up</a> or <a href="/login">log in</a> to
+      manage your todos.
+    </p>
+  </div>
+  {% endif %}
 </div>
-{% endif %}
 ```
 
 **2. Create the todo list partial:**
@@ -352,7 +364,7 @@ def todo_edit_form(req):
     todo = one("SELECT * FROM todos WHERE id = ?", int(todo_id))
     if not todo:
         return Response.text("Todo not found", 404)
-    
+
     return render_htmx(req, "todos/edit.html", todo=todo)
 
 # Add this route
@@ -361,15 +373,15 @@ app.get("/todos/{id}/edit", todo_edit_form)
 
 ```html
 <!-- Create app/views/todos/edit.html -->
-<input 
-    type="text" 
-    value="{{ todo.title }}"
-    hx-put="/todos/{{ todo.id }}"
-    hx-trigger="keyup[key=='Enter']"
-    hx-target="#todo-list"
-    hx-swap="innerHTML"
-    style="flex: 1; border: 1px solid #ccc; padding: 4px;"
->
+<input
+  type="text"
+  value="{{ todo.title }}"
+  hx-put="/todos/{{ todo.id }}"
+  hx-trigger="keyup[key=='Enter']"
+  hx-target="#todo-list"
+  hx-swap="innerHTML"
+  style="flex: 1; border: 1px solid #ccc; padding: 4px;"
+/>
 ```
 
 ✅ **Result:** Full CRUD with HTMX - add, toggle, delete todos without page reload
