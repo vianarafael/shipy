@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2024-12-26
+
+### Added
+
+- **Routing Documentation**: Complete HTTP methods documentation (GET, POST, PUT, PATCH, DELETE)
+- **HTMX Response Helpers**: Added `Response.htmx_redirect()` and `Response.htmx_refresh()` documentation
+- **Enhanced CLI Documentation**: All CLI commands now properly documented with descriptions
+
+### Improved
+
+- **Tutorial Formatting**: Fixed code fence structure and formatting issues
+- **Edit Functionality**: Enhanced inline editing with proper save-on-enter/blur and escape-to-cancel
+- **Technical Accuracy**: Corrected CSRF implementation and HTMX behavior explanations
+- **Documentation Clarity**: Improved readability and organization throughout
+
+### Fixed
+
+- **Code Fence Issues**: Resolved nested four-backtick blocks in tutorial
+- **HTMX Triggers**: Proper separation of PUT and GET functionality in edit templates
+- **Template Structure**: Fixed HTML nesting and structural issues
+
 ## [0.3.2] - 2024-12-26
 
 ### Fixed
