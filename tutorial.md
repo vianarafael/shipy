@@ -35,40 +35,29 @@ Status: Authenticated
 
 **B) HTMX Todo Toggle:**
 
+When you check/uncheck a todo, HTMX automatically makes a request and updates the page:
+
 ```
-✅ HTMX Request/Response
-POST /todos/1/toggle HTTP/1.1
-HX-Request: true
-HX-Target: #todo-list
+1. User clicks checkbox → HTMX sends POST request
+   POST /todos/1/toggle HTTP/1.1
+   HX-Request: true (tells server this is HTMX)
+   HX-Target: #todo-list (where to put response)
 
-Response: 200 OK
-Content-Type: text/html
-<div class="stack">
-  <div class="card">
-    <input type="checkbox" checked hx-post="/todos/1/toggle">
-    <span style="text-decoration: line-through;">Buy milk</span>
-  </div>
-</div>
+2. Server responds with updated HTML
+   Response: 200 OK
+   Content-Type: text/html
+   <div class="stack">
+     <div class="card">
+       <input type="checkbox" checked hx-post="/todos/1/toggle">
+       <span style="text-decoration: line-through;">Buy milk</span>
+     </div>
+   </div>
+
+3. HTMX replaces #todo-list with new HTML
+   → Todo appears crossed out without page reload
 ```
 
-## 2. Stack Check
-
-**30-Second Checklist:**
-
-- ✅ Python 3.11+ installed (`python --version`)
-- ✅ `pip install shipy-web` works
-- ✅ `shipy --version` shows 0.2.2+
-- ✅ Port 8000 available
-- ✅ Basic terminal/editor skills
-
-**What You'll Build:**
-
-- User authentication (signup/login/logout)
-- Protected todo CRUD with HTMX
-- CSRF protection
-- Production deployment config
-
-## 3. Scaffold
+## 2. Scaffold
 
 **Generate the app:**
 
@@ -103,7 +92,7 @@ shipy db init
 
 ✅ **Result:** Database created with users table
 
-## 4. DB & Auth
+## 3. DB & Auth
 
 **Add todos table to schema:**
 
@@ -142,7 +131,7 @@ shipy db init
 - CSRF protection
 - Rate limiting on login attempts
 
-## 5. CRUD with HTMX
+## 4. CRUD with HTMX
 
 **Create todos template directory:**
 
@@ -153,6 +142,7 @@ mkdir -p app/views/todos
 ### What's Already Generated vs. What You Need to Add
 
 **✅ Already in scaffold (`app/main.py`):**
+
 - Basic imports including `render_htmx`, `is_htmx_request`, `login_required`
 - Middleware setup with `@app.middleware("request")`
 - Auth routes (signup, login, logout)
@@ -161,6 +151,7 @@ mkdir -p app/views/todos
 **➕ You need to add:**
 
 **1. Update the home route to include todos:**
+
 ```python
 # Replace the existing home function in app/main.py
 def home(req):
@@ -170,6 +161,7 @@ def home(req):
 ```
 
 **2. Add todo CRUD routes:**
+
 ```python
 # Add these new functions to app/main.py
 
@@ -221,6 +213,7 @@ async def todo_delete(req):
 ```
 
 **3. Add the new routes:**
+
 ```python
 # Add these route registrations at the end of app/main.py
 
@@ -234,6 +227,7 @@ app.delete("/todos/{id}", todo_delete)
 ### Template Updates
 
 **✅ Already in scaffold (`app/views/home/index.html`):**
+
 - Basic HTML structure with HTMX CDN
 - Header with navigation
 - Flash message display
@@ -242,6 +236,7 @@ app.delete("/todos/{id}", todo_delete)
 **➕ You need to add the todo functionality:**
 
 **1. Update the home template to include todos:**
+
 ```html
 <!-- Replace the content inside the {% if user %} block in app/views/home/index.html -->
 {% if user %}
@@ -326,7 +321,7 @@ app.delete("/todos/{id}", todo_delete)
 
 ✅ **Result:** Full CRUD with HTMX - add, toggle, delete todos without page reload
 
-## 6. CSRF Protection
+## 5. CSRF Protection
 
 **How CSRF works in Shipy:**
 
@@ -358,7 +353,7 @@ app.delete("/todos/{id}", todo_delete)
 
 ✅ **Result:** CSRF protection prevents unauthorized form submissions
 
-## 7. Error Handling
+## 6. Error Handling
 
 **Trigger a server error:**
 
@@ -381,7 +376,7 @@ app.get("/error", error_test)
 
 ✅ **Result:** Professional error handling with debugging info
 
-## 8. Production Deploy
+## 7. Production Deploy
 
 **Generate deployment files:**
 
@@ -464,7 +459,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ✅ **Result:** Production-ready deployment with systemd + nginx
 
-## 9. Recap & Next Steps
+## 8. Recap & Next Steps
 
 **What you built:**
 
