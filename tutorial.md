@@ -199,6 +199,24 @@ async def todo_toggle(req):
     return render_htmx(req, "todos/list.html", todos=todos)
 
 @login_required()
+async def todo_update(req):
+    """HTMX endpoint for updating todo title"""
+    todo_id = req.path_params.get("id")
+    if not todo_id:
+        return Response.text("Todo ID required", 400)
+    
+    await req.load_body()
+    form = Form(req.form).require("title")
+    if not form.ok:
+        return Response.text("Title required", 400)
+
+    with tx():
+        exec("UPDATE todos SET title = ? WHERE id = ?", form["title"], int(todo_id))
+
+    todos = query("SELECT * FROM todos ORDER BY created_at DESC")
+    return render_htmx(req, "todos/list.html", todos=todos)
+
+@login_required()
 async def todo_delete(req):
     """HTMX endpoint for deleting todos"""
     todo_id = req.path_params.get("id")
@@ -210,7 +228,6 @@ async def todo_delete(req):
 
     todos = query("SELECT * FROM todos ORDER BY created_at DESC")
     return render_htmx(req, "todos/list.html", todos=todos)
-```
 
 **3. Add the new routes:**
 
@@ -221,6 +238,7 @@ async def todo_delete(req):
 app.get("/todos", todo_list)
 app.post("/todos", todo_create)
 app.post("/todos/{id}/toggle", todo_toggle)
+app.put("/todos/{id}", todo_update)
 app.delete("/todos/{id}", todo_delete)
 ```
 
@@ -264,7 +282,6 @@ app.delete("/todos/{id}", todo_delete)
 
   <!-- Todo List -->
   <div id="todo-list">{% include "todos/list.html" %}</div>
-</div>
 {% else %}
 <div class="card">
   <h2>Welcome to Shipy Todo</h2>
@@ -298,6 +315,10 @@ app.delete("/todos/{id}", todo_delete)
     />
     <span
       style="flex: 1; {% if todo.done %}text-decoration: line-through; opacity: 0.6;{% endif %}"
+      hx-get="/todos/{{ todo.id }}/edit"
+      hx-target="this"
+      hx-swap="outerHTML"
+      style="cursor: pointer;"
     >
       {{ todo.title }}
     </span>
@@ -317,6 +338,38 @@ app.delete("/todos/{id}", todo_delete)
 {% else %}
 <div class="muted">No todos yet. Add one above!</div>
 {% endif %}
+```
+
+**3. Add edit functionality (optional):**
+
+```python
+# Add this to app/main.py for inline editing
+
+@login_required()
+def todo_edit_form(req):
+    """Show inline edit form"""
+    todo_id = req.path_params.get("id")
+    todo = one("SELECT * FROM todos WHERE id = ?", int(todo_id))
+    if not todo:
+        return Response.text("Todo not found", 404)
+    
+    return render_htmx(req, "todos/edit.html", todo=todo)
+
+# Add this route
+app.get("/todos/{id}/edit", todo_edit_form)
+```
+
+```html
+<!-- Create app/views/todos/edit.html -->
+<input 
+    type="text" 
+    value="{{ todo.title }}"
+    hx-put="/todos/{{ todo.id }}"
+    hx-trigger="keyup[key=='Enter']"
+    hx-target="#todo-list"
+    hx-swap="innerHTML"
+    style="flex: 1; border: 1px solid #ccc; padding: 4px;"
+>
 ```
 
 ✅ **Result:** Full CRUD with HTMX - add, toggle, delete todos without page reload
