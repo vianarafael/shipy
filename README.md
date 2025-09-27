@@ -24,6 +24,29 @@ shipy dev
 
 Visit http://localhost:8000 and sign up to get started!
 
+## Routing
+
+Shipy supports all standard HTTP methods with imperative routing:
+
+```python
+from shipy.app import App
+
+app = App()
+
+# Standard HTTP methods
+app.get("/", home)
+app.post("/users", create_user)
+app.put("/users/{id}", update_user)
+app.patch("/users/{id}", partial_update_user)
+app.delete("/users/{id}", delete_user)
+
+# Path parameters are available in req.path_params
+def update_user(req):
+    user_id = req.path_params.get("id")
+    # ... update logic ...
+    return Response.text(f"Updated user {user_id}")
+```
+
 ## Coding Standards
 
 ### Code Organization
@@ -88,14 +111,16 @@ See `examples/hello/app/main.py:1` and `examples/hello/app/views/home/index.html
 ## CLI
 
 - `shipy new <name>` — creates an auth-first scaffolded project in `./<name>`
-- `shipy dev [--app app.main:app] [--host 127.0.0.1] [--port 8000]`
+- `shipy dev [--app app.main:app] [--host 127.0.0.1] [--port 8000]` — run development server
+- `shipy version` — show current version
+- `shipy gensecret` — generate a random SHIPY_SECRET for production
 - `shipy db init [--db ./data/app.db] [--schema data/schema.sql]` — initialize database
 - `shipy db backup [--db ./data/app.db] [--out data/backups]` — create database backup
 - `shipy db run <path.sql> [--db ./data/app.db]` — execute SQL script
 - `shipy db make-migration <name> [--dir data/migrations]` — create timestamped migration file
 - `shipy db ls [--dir data/migrations]` — list migration files
 - `shipy db shell [--db ./data/app.db]` — open interactive sqlite3 shell
-- `shipy deploy` — deployment helpers
+- `shipy deploy emit [--path deploy]` — generate systemd + nginx configs
 
 ## Templates
 
@@ -147,6 +172,23 @@ HTMX templates have access to `htmx` context:
 ```
 
 HTMX is included by default in scaffolded apps via CDN.
+
+### HTMX Response Helpers
+
+For advanced HTMX interactions, use these response helpers:
+
+```python
+from shipy.app import Response
+
+# HTMX redirect to specific target
+def update_profile(req):
+    # ... update logic ...
+    return Response.htmx_redirect("/profile", target="#main")
+
+# HTMX refresh (reload the page)
+def reset_form(req):
+    return Response.htmx_refresh()
+```
 
 ## Middleware
 
