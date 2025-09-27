@@ -176,6 +176,7 @@ def cmd_new(name: str, *, force: bool = False) -> int:
     views = app / "views"
     public = root / "public"
     dbdir = root / "data"
+    main_py = app / "main.py"
 
     files: dict[Path, str] = {
         root / ".gitignore": """
@@ -200,96 +201,6 @@ def cmd_new(name: str, *, force: bool = False) -> int:
             .err{color:#f87171;font-size:14px}
             .flash{padding:8px 12px;border-radius:10px;background:#0f172a;color:#e2e8f0}
             nav a{margin-right:10px}
-        """,
-        app / "main.py": """
-            from shipy.app import App, Response
-            from shipy.render import render_req, render_htmx, is_htmx_request
-            from shipy.sql import connect, query, one, exec, tx
-            from shipy.forms import Form
-            from shipy.auth import (
-                current_user, login_required,
-                hash_password, check_password,
-                login, logout,
-                too_many_login_attempts, record_login_failure, reset_login_failures
-            )
-
-            app = App()
-            connect("data/app.db")
-
-            # Helper function for reliable user access
-            def get_user_safely(req):
-                """Get user from state or fetch directly if not available."""
-                if hasattr(req.state, 'user'):
-                    return req.state.user
-                user = current_user(req)
-                req.state.user = user  # Cache for future use
-                return user
-
-            # Middleware: attach user to request state (optional)
-            @app.middleware("request")
-            def attach_user_to_state(req):
-                user = current_user(req)
-                req.state.user = user
-
-            def home(req):
-                user = get_user_safely(req)  # Reliable user access
-                return render_htmx(req, "home/index.html", user=user)
-
-            def signup_form(req): return render_req(req, "users/new.html")
-
-            async def signup(req):
-                await req.load_body()
-                form = Form(req.form).require("email","password").min("password", 6).email("email")
-                if not form.ok: return render_req(req, "users/new.html", form=form)
-                if one("SELECT id FROM users WHERE email=?", form["email"]):
-                    form.errors.setdefault("email", []).append("already registered")
-                    return render_req(req, "users/new.html", form=form)
-                with tx():
-                    exec("INSERT INTO users(email,password_hash) VALUES(?,?)",
-                         form["email"], hash_password(form['password']))
-                    u = one("SELECT id,email FROM users WHERE email=?", form["email"])
-                resp = Response.redirect("/")
-                login(req, resp, u["id"])
-                return resp
-
-            def login_form(req): return render_req(req, "sessions/login.html")
-
-            async def login_post(req):
-                await req.load_body()
-                form = Form(req.form).require("email","password").email("email")
-                ip = req.scope.get("client", ("",0))[0] or "unknown"
-                if too_many_login_attempts(ip):
-                    form.errors.setdefault("email", []).append("too many attempts, try later")
-                    return render_req(req, "sessions/login.html", form=form)
-                u = one("SELECT id,email,password_hash FROM users WHERE email=?", form["email"])
-                if not u or not check_password(form["password"], u["password_hash"]):
-                    record_login_failure(ip)
-                    form.errors.setdefault("email", []).append("invalid email or password")
-                    return render_req(req, "sessions/login.html", form=form)
-                reset_login_failures(ip)
-                resp = Response.redirect("/")
-                login(req, resp, u["id"])
-                return resp
-
-            async def logout_post(req):
-                resp = Response.redirect("/")
-                logout(resp)
-                return resp
-
-            @login_required()
-            def secret(req):
-                # req.state.user is guaranteed to exist here
-                user = get_user_safely(req)  # Reliable user access
-                return render_req(req, "secret.html", user=user)
-
-            # Routes
-            app.get("/", home)
-            app.get("/signup", signup_form)
-            app.post("/signup", signup)
-            app.get("/login", login_form)
-            app.post("/login", login_post)
-            app.post("/logout", logout_post)
-            app.get("/secret", secret)
         """,
         views / "home" / "index.html": """
             <!doctype html>
@@ -415,8 +326,106 @@ def cmd_new(name: str, *, force: bool = False) -> int:
             CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
         """,
     }
+    
+    # Add main.py content separately to avoid syntax issues
+    main_py_content = """
+            from shipy.app import App, Response
+            from shipy.render import render_req, render_htmx, is_htmx_request
+            from shipy.sql import connect, query, one, exec, tx
+            from shipy.forms import Form
+            from shipy.auth import (
+                current_user, login_required,
+                hash_password, check_password,
+                login, logout,
+                too_many_login_attempts, record_login_failure, reset_login_failures
+            )
+
+            app = App()
+            connect("data/app.db")
+
+            # Helper function for reliable user access
+            def get_user_safely(req):
+                \"\"\"Get user from state or fetch directly if not available.\"\"\"
+                if hasattr(req.state, 'user'):
+                    return req.state.user
+                user = current_user(req)
+                req.state.user = user  # Cache for future use
+                return user
+
+            # Middleware: attach user to request state (optional)
+            @app.middleware("request")
+            def attach_user_to_state(req):
+                user = current_user(req)
+                req.state.user = user
+
+            def home(req):
+                user = get_user_safely(req)  # Reliable user access
+                return render_htmx(req, "home/index.html", user=user)
+
+            def signup_form(req): return render_req(req, "users/new.html")
+
+            async def signup(req):
+                await req.load_body()
+                form = Form(req.form).require("email","password").min("password", 6).email("email")
+                if not form.ok:
+                    return render_req(req, "users/new.html", form=form)
+                if one("SELECT id FROM users WHERE email=?", form["email"]):
+                    form.errors.setdefault("email", []).append("already registered")
+                    return render_req(req, "users/new.html", form=form)
+                with tx():
+                    exec("INSERT INTO users(email,password_hash) VALUES(?,?)", form["email"], hash_password(form['password']))
+                u = one("SELECT id,email FROM users WHERE email=?", form["email"])
+                resp = Response.redirect("/")
+                login(req, resp, u["id"])
+                return resp
+
+            def login_form(req): return render_req(req, "sessions/login.html")
+
+            async def login_post(req):
+                await req.load_body()
+                form = Form(req.form).require("email","password").email("email")
+                ip = req.scope.get("client", ("",0))[0] or "unknown"
+                if too_many_login_attempts(ip):
+                    form.errors.setdefault("email", []).append("too many attempts, try later")
+                    return render_req(req, "sessions/login.html", form=form)
+                u = one("SELECT id,email,password_hash FROM users WHERE email=?", form["email"])
+                if not u or not check_password(form["password"], u["password_hash"]):
+                    record_login_failure(ip)
+                    form.errors.setdefault("email", []).append("invalid email or password")
+                    return render_req(req, "sessions/login.html", form=form)
+                reset_login_failures(ip)
+                resp = Response.redirect("/")
+                login(req, resp, u["id"])
+                return resp
+
+            async def logout_post(req):
+                resp = Response.redirect("/")
+                logout(resp)
+                return resp
+
+            @login_required()
+            def secret(req):
+                # req.state.user is guaranteed to exist here
+                user = get_user_safely(req)  # Reliable user access
+                return render_req(req, "secret.html", user=user)
+
+            # Routes
+            app.get("/", home)
+            app.get("/signup", signup_form)
+            app.post("/signup", signup)
+            app.get("/login", login_form)
+            app.post("/login", login_post)
+            app.post("/logout", logout_post)
+            app.get("/secret", secret)
+    """
+    
     for path, content in files.items():
+        if isinstance(path, str):
+            path = root / path
         _write_file(path, content, force=force)
+    
+    # Write main.py separately
+    _write_file(app / "main.py", main_py_content, force=force)
 
     print("\nNext steps:")
     print(f"  cd {root}")
