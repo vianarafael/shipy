@@ -68,34 +68,36 @@ Use HTML comments to organize template sections:
 ```html
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <!-- ---- Meta & Head ---- -->
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Page Title</title>
-    <link rel="stylesheet" href="/public/base.css">
-</head>
-<body>
+    <link rel="stylesheet" href="/public/base.css" />
+  </head>
+  <body>
     <div class="wrap">
-        <!-- ---- Header ---- -->
-        <header>
-            <h1>App Name</h1>
-            <nav>...</nav>
-        </header>
-        
-        <!-- ---- Flash Messages ---- -->
-        {% if flashes %}{% for f in flashes %}<div class="flash">{{ f.msg }}</div>{% endfor %}{% endif %}
-        
-        <!-- ---- Main Content ---- -->
-        <main>
-            <h2>Page Content</h2>
-            <p>...</p>
-        </main>
-        
-        <!-- ---- Footer ---- -->
-        <footer>...</footer>
+      <!-- ---- Header ---- -->
+      <header>
+        <h1>App Name</h1>
+        <nav>...</nav>
+      </header>
+
+      <!-- ---- Flash Messages ---- -->
+      {% if flashes %}{% for f in flashes %}
+      <div class="flash">{{ f.msg }}</div>
+      {% endfor %}{% endif %}
+
+      <!-- ---- Main Content ---- -->
+      <main>
+        <h2>Page Content</h2>
+        <p>...</p>
+      </main>
+
+      <!-- ---- Footer ---- -->
+      <footer>...</footer>
     </div>
-</body>
+  </body>
 </html>
 ```
 

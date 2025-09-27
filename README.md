@@ -27,9 +27,11 @@ Visit http://localhost:8000 and sign up to get started!
 ## Coding Standards
 
 ### Code Organization
+
 Use section comments to organize your code for better readability:
 
 **Python files (`app/main.py`):**
+
 ```python
 # ---- Imports ----
 from shipy.app import App, Response
@@ -55,24 +57,25 @@ app.get("/", home)
 ```
 
 **HTML templates:**
+
 ```html
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <!-- ---- Meta & Head ---- -->
-    <meta charset="utf-8">
+    <meta charset="utf-8" />
     <title>Page Title</title>
-</head>
-<body>
+  </head>
+  <body>
     <!-- ---- Header ---- -->
     <header>...</header>
-    
+
     <!-- ---- Main Content ---- -->
     <main>...</main>
-    
+
     <!-- ---- Footer ---- -->
     <footer>...</footer>
-</body>
+  </body>
 </html>
 ```
 
