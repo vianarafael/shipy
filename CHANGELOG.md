@@ -5,13 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.3] - 2024-12-26
+## [0.3.3] - 2025-09-27
 
 ### Added
 
 - **Routing Documentation**: Complete HTTP methods documentation (GET, POST, PUT, PATCH, DELETE)
 - **HTMX Response Helpers**: Added `Response.htmx_redirect()` and `Response.htmx_refresh()` documentation
 - **Enhanced CLI Documentation**: All CLI commands now properly documented with descriptions
+- **Coding Standards**: Added section comments to scaffold templates and comprehensive coding standards documentation
+- **HTML Section Comments**: Added structured comments to all template files for better organization
 
 ### Improved
 
@@ -19,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Edit Functionality**: Enhanced inline editing with proper save-on-enter/blur and escape-to-cancel
 - **Technical Accuracy**: Corrected CSRF implementation and HTMX behavior explanations
 - **Documentation Clarity**: Improved readability and organization throughout
+- **HTML Formatting**: Fixed HTML formatting in coding standards examples with proper self-closing tags
 
 ### Fixed
 
@@ -26,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HTMX Triggers**: Proper separation of PUT and GET functionality in edit templates
 - **Template Structure**: Fixed HTML nesting and structural issues
 
-## [0.3.2] - 2024-12-26
+## [0.3.2] - 2025-09-27
 
 ### Fixed
 
@@ -34,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HTMX Functionality**: Fixed `is_htmx_request()` function causing 500 errors
 - **Request Object**: Headers are now properly parsed and accessible as `req.headers`
 
-## [0.3.1] - 2024-12-26
+## [0.3.1] - 2025-09-27
 
 ### Fixed
 
@@ -48,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **File Writing Logic**: Added support for string paths in file generation
 - **Documentation**: Improved tutorial formatting and clarity
 
-## [0.3.0] - 2024-12-26
+## [0.3.0] - 2025-09-26
 
 ### Added
 
@@ -73,7 +76,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tutorial**: Comprehensive guide for building production-ready applications
 - **CLI Help**: Updated help text and command descriptions
 
-## [0.2.1] - 2024-12-19
+## [0.2.2] - 2025-09-25
+
+### Fixed
+
+- Scaffold welcome page issues
+
+## [0.2.1] - 2025-09-25
 
 ### Added
 
@@ -86,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README now reflects current auth-first scaffold and database defaults
 - CLI documentation updated to show correct commands and paths
 
-## [0.2.0] - 2024-12-19
+## [0.2.0] - 2025-09-25
 
 ### Added
 
@@ -118,9 +127,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Schema application is idempotent (safe to run multiple times)
 - Improved error handling in database initialization
 
-## [0.1.1] - Previous Release
+## [0.1.1] - 2025-09-24
+
+### Added
 
 - Initial release with posts demo scaffold
 - Basic CLI commands (`new`, `dev`, `db apply`)
 - SQLite helpers and session management
 - Jinja2 template rendering
+- Scaffold adds `app/__init__.py`
+- Dev command adds CWD to sys.path
