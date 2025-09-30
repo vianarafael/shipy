@@ -20,17 +20,9 @@ shipy dev  # http://localhost:8000
 
 Get Started: https://shipy.rafaelviana.com/docs/get-started
 
-Tutorial (Todo w/ Auth): https://shipy.rafaelviana.com/docs/tutorials/todo
-
-Deploy (VPS in 15 min): https://shipy.rafaelviana.com/docs/deploy/vps-15min
-
-Stripe stub → live: https://shipy.rafaelviana.com/docs/payments/stripe-stub
-
 ## Contributing
 
-Good First Issues: https://github.com/rafaelviana/shipy/issues?q=is%3Aissue+is%3Aopen+label%3A"good%20first%20issue"
-
-Guide: https://shipy.rafaelviana.com/docs/contribute
+Good First Issues: https://github.com/rafaelviana/shipy/issues
 
 ## License
 
