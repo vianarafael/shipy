@@ -22,7 +22,7 @@ Get Started: https://shipy.rafaelviana.com/docs/get-started
 
 ## Contributing
 
-Good First Issues: https://github.com/rafaelviana/shipy/issues
+Good First Issues: https://github.com/vianarafael/shipy/issues
 
 ## License
 
